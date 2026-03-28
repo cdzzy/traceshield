@@ -1,280 +1,237 @@
 // ============================================================
 // TraceShield - Core Type Definitions
-// Agent Reliability & Behavior Auditing Framework
+// Agent Behavior Tracing & Protection System
 // ============================================================
 
-// ---- Action Types ----
-
-export type ActionType =
-  | 'tool_call'
-  | 'llm_call'
-  | 'decision'
-  | 'data_access'
-  | 'human_escalation'
-  | '*';
-
-// ---- Policy Types ----
-
-export interface PolicySet {
-  version: string;
-  policies: Policy[];
-}
-
-export interface Policy {
-  name: string;
-  description?: string;
-  enabled?: boolean;
-  priority?: number;
-  rules: PolicyRule[];
-}
-
-export interface PolicyRule {
-  id: string;
-  action: ActionType;
-  condition: RuleCondition;
-  effect: PolicyEffect;
-  message?: string;
-}
-
-export type PolicyEffect = 'deny' | 'warn' | 'audit';
-
-export interface RuleCondition {
-  tool_name?: PatternMatch;
-  model?: PatternMatch;
-  input_contains?: string[];
-  input_not_contains?: string[];
-  output_contains?: string[];
-  output_not_contains?: string[];
-  token_count?: NumericConstraint;
-  latency_ms?: NumericConstraint;
-  call_count?: NumericConstraint;
-  custom?: string; // serializable expression for custom conditions
-}
-
-export interface PatternMatch {
-  exact?: string;
-  pattern?: string; // regex pattern
-  oneOf?: string[];
-  noneOf?: string[];
-}
-
-export interface NumericConstraint {
-  min?: number;
-  max?: number;
-}
-
-// ---- Policy Evaluation Result ----
-
-export interface PolicyEvaluation {
-  policy_name: string;
-  rule_id: string;
-  effect: PolicyEffect;
-  result: 'allow' | 'deny' | 'warn';
-  message?: string;
-  evaluated_at: string;
-}
-
-export interface EvalContext {
-  action_type: ActionType;
-  action_name: string;
-  input: unknown;
-  output?: unknown;
-  metadata?: Record<string, unknown>;
-  trace_id: string;
-  span_count: number;
-  elapsed_ms: number;
-  token_count?: number;
-}
-
-export interface PolicyDecision {
-  allowed: boolean;
-  evaluations: PolicyEvaluation[];
-  blocked_by?: PolicyEvaluation;
-}
+import { EventEmitter } from 'node:events';
 
 // ---- Trace Types ----
 
-export type TraceStatus = 'running' | 'completed' | 'failed' | 'aborted';
-export type SpanStatus = 'running' | 'completed' | 'failed';
+export type TraceId = string;
+export type AgentId = string;
+export type TraceLevel = 'debug' | 'info' | 'warn' | 'error' | 'critical';
+export type TraceType = 
+  | 'action'
+  | 'decision'
+  | 'tool_call'
+  | 'message'
+  | 'resource'
+  | 'security'
+  | 'error';
 
 export interface Trace {
-  id: string;
-  session_id?: string;
-  agent_id: string;
-  started_at: string;
-  ended_at?: string;
-  status: TraceStatus;
-  spans: Span[];
-  metadata?: Record<string, unknown>;
-  integrity_hash: string;
+  id: TraceId;
+  agentId: AgentId;
+  type: TraceType;
+  level: TraceLevel;
+  timestamp: number;
+  parentId?: TraceId;        // For tracing hierarchies
+  spanId?: string;           // For distributed tracing
+  data: TraceData;
+  tags?: Record<string, string>;
+  redacted?: boolean;        // Sensitive data redacted
 }
 
-export interface Span {
-  id: string;
-  trace_id: string;
-  parent_span_id?: string;
-  sequence: number;
-  action_type: ActionType;
-  name: string;
-  input: unknown;
-  output?: unknown;
-  started_at: string;
-  ended_at?: string;
-  duration_ms?: number;
-  status: SpanStatus;
-  policy_evaluations: PolicyEvaluation[];
-  error?: SpanError;
-  metadata?: Record<string, unknown>;
-  hash: string;
-  previous_hash: string;
+export type TraceData = 
+  | ActionTrace
+  | DecisionTrace
+  | ToolCallTrace
+  | MessageTrace
+  | ResourceTrace
+  | SecurityTrace
+  | ErrorTrace;
+
+export interface ActionTrace {
+  action: string;
+  target?: string;
+  result?: unknown;
+  duration?: number;
 }
 
-export interface SpanError {
-  type: string;
-  message: string;
+export interface DecisionTrace {
+  decision: string;
+  inputs: Record<string, unknown>;
+  output: unknown;
+  reasoning?: string;
+  confidence?: number;
+}
+
+export interface ToolCallTrace {
+  tool: string;
+  arguments: Record<string, unknown>;
+  result?: unknown;
+  error?: string;
+  duration?: number;
+}
+
+export interface MessageTrace {
+  from: AgentId;
+  to: AgentId | 'broadcast';
+  content: string;
+  topic?: string;
+}
+
+export interface ResourceTrace {
+  resourceId: string;
+  operation: 'acquire' | 'release' | 'timeout' | 'denied';
+  duration?: number;
+}
+
+export interface SecurityTrace {
+  event: 'auth' | 'permission' | 'rate_limit' | 'data_access' | 'anomaly';
+  severity: 'low' | 'medium' | 'high' | 'critical';
+  details: Record<string, unknown>;
+}
+
+export interface ErrorTrace {
+  error: string;
   stack?: string;
+  context?: Record<string, unknown>;
 }
 
-// ---- Attribution / Root Cause Analysis ----
+// ---- Shield Types ----
 
-export type FailureType =
-  | 'policy_violation'
-  | 'tool_error'
-  | 'model_error'
-  | 'timeout'
-  | 'data_quality'
-  | 'cascading_failure'
-  | 'unknown';
+export type ShieldRuleId = string;
+export type ShieldAction = 'allow' | 'block' | 'warn' | 'audit' | 'mask';
 
-export type Severity = 'low' | 'medium' | 'high' | 'critical';
-
-export interface AttributionReport {
-  id: string;
-  trace_id: string;
-  failure_span_id: string;
-  root_causes: RootCause[];
-  causal_chain: CausalLink[];
-  timeline: TimelineEvent[];
-  summary: string;
-  severity: Severity;
-  recommendations: string[];
-  generated_at: string;
-}
-
-export interface RootCause {
-  type: FailureType;
-  span_id: string;
-  description: string;
-  confidence: number; // 0.0 - 1.0
-  evidence: string[];
-}
-
-export interface CausalLink {
-  from_span_id: string;
-  to_span_id: string;
-  relationship: 'caused_by' | 'triggered' | 'dependent_on' | 'correlated';
+export interface ShieldRule {
+  id: ShieldRuleId;
+  name: string;
   description?: string;
+  enabled: boolean;
+  priority: number;
+  conditions: ShieldCondition[];
+  action: ShieldAction;
+  response?: string;
 }
 
-export interface TimelineEvent {
-  timestamp: string;
-  span_id: string;
-  event_type: 'action_start' | 'action_end' | 'policy_check' | 'violation' | 'error';
-  description: string;
+export type ShieldCondition = 
+  | DataCondition
+  | ActionCondition
+  | TimeCondition
+  | RateCondition
+  | PatternCondition;
+
+export interface DataCondition {
+  type: 'data';
+  field: string;
+  operator: 'contains' | 'equals' | 'matches' | 'in';
+  value: string | string[];
 }
 
-// ---- Storage Interface ----
-
-export interface TraceQuery {
-  agent_id?: string;
-  session_id?: string;
-  status?: TraceStatus;
-  from?: string;
-  to?: string;
-  limit?: number;
-  offset?: number;
+export interface ActionCondition {
+  type: 'action';
+  agentId?: AgentId;
+  action?: string;
+  target?: string;
 }
 
-export interface ViolationQuery {
-  agent_id?: string;
-  policy_name?: string;
-  effect?: PolicyEffect;
-  from?: string;
-  to?: string;
-  limit?: number;
-  offset?: number;
+export interface TimeCondition {
+  type: 'time';
+  start?: string;  // HH:mm
+  end?: string;
+  days?: string[]; // ['Mon', 'Tue', ...]
 }
 
-export interface StoredViolation {
+export interface RateCondition {
+  type: 'rate';
+  window: number;  // ms
+  maxCount: number;
+}
+
+export interface PatternCondition {
+  type: 'pattern';
+  field: string;
+  pattern: string;  // regex
+}
+
+// ---- Audit Types ----
+
+export interface AuditRecord {
   id: string;
-  trace_id: string;
-  span_id: string;
-  agent_id: string;
-  policy_name: string;
-  rule_id: string;
-  effect: PolicyEffect;
-  message?: string;
-  context: EvalContext;
-  occurred_at: string;
-}
-
-export interface StorageBackend {
-  initialize(): Promise<void>;
-  close(): Promise<void>;
-
-  // Trace operations
-  saveTrace(trace: Trace): Promise<void>;
-  getTrace(traceId: string): Promise<Trace | null>;
-  queryTraces(query: TraceQuery): Promise<Trace[]>;
-  updateTrace(traceId: string, updates: Partial<Trace>): Promise<void>;
-
-  // Span operations
-  saveSpan(span: Span): Promise<void>;
-  getSpansByTrace(traceId: string): Promise<Span[]>;
-
-  // Violation operations
-  saveViolation(violation: StoredViolation): Promise<void>;
-  queryViolations(query: ViolationQuery): Promise<StoredViolation[]>;
-
-  // Attribution operations
-  saveReport(report: AttributionReport): Promise<void>;
-  getReport(reportId: string): Promise<AttributionReport | null>;
-  getReportsByTrace(traceId: string): Promise<AttributionReport[]>;
+  timestamp: number;
+  agentId: AgentId;
+  traceId: TraceId;
+  ruleId?: ShieldRuleId;
+  action: ShieldAction;
+  result: 'success' | 'blocked' | 'warned';
+  details: Record<string, unknown>;
 }
 
 // ---- Configuration ----
 
 export interface TraceShieldConfig {
-  policies?: string | PolicySet; // file path or inline policy set
-  storage?: StorageConfig;
-  hooks?: TraceShieldHooks;
-  hashAlgorithm?: string;
+  tracing?: {
+    enabled: boolean;
+    level?: TraceLevel;
+    maxTraces?: number;
+    retentionMs?: number;
+    sampleRate?: number;  // 0-1
+  };
+  shielding?: {
+    enabled: boolean;
+    failClosed?: boolean;
+  };
+  audit?: {
+    enabled: boolean;
+    storage?: AuditStorage;
+  };
 }
 
-export type StorageConfig =
-  | { type: 'memory' }
-  | { type: 'sqlite'; path: string }
-  | { type: 'postgresql'; connectionString: string }
-  | { type: 'custom'; backend: StorageBackend };
+export type AuditStorage = 'memory' | 'file' | 'database';
 
-export interface TraceShieldHooks {
-  onViolation?: (violation: StoredViolation) => void | Promise<void>;
-  onTraceComplete?: (trace: Trace) => void | Promise<void>;
-  onSpanStart?: (span: Span) => void | Promise<void>;
-  onSpanEnd?: (span: Span) => void | Promise<void>;
+// ---- Events ----
+
+export interface TraceShieldEvents {
+  'trace:recorded': (trace: Trace) => void;
+  'trace:error': (error: Error, trace: Trace) => void;
+  'shield:blocked': (trace: Trace, rule: ShieldRule) => void;
+  'shield:warned': (trace: Trace, rule: ShieldRule) => void;
+  'audit:created': (record: AuditRecord) => void;
+  'anomaly:detected': (anomaly: AnomalyAlert) => void;
 }
 
-export interface GuardConfig {
-  agentId: string;
-  sessionId?: string;
-  metadata?: Record<string, unknown>;
+export interface AnomalyAlert {
+  id: string;
+  timestamp: number;
+  type: 'rate_spike' | 'error_spike' | 'security' | 'performance';
+  severity: 'low' | 'medium' | 'high' | 'critical';
+  description: string;
+  relatedTraces: TraceId[];
 }
 
-// ---- Guard Action Input ----
+// ---- Event Emitter ----
 
-export interface ActionInput {
-  name: string;
-  input: unknown;
-  metadata?: Record<string, unknown>;
-  parentSpanId?: string;
+export class TypedEventEmitter extends EventEmitter {
+  override emit<K extends keyof TraceShieldEvents>(
+    event: K, 
+    ...args: Parameters<TraceShieldEvents[K]>
+  ): boolean;
+  override emit(event: string, ...args: unknown[]): boolean {
+    return super.emit(event, ...args);
+  }
+
+  override on<K extends keyof TraceShieldEvents>(
+    event: K, 
+    listener: TraceShieldEvents[K]
+  ): this;
+  override on(event: string, listener: (...args: unknown[]) => void): this {
+    return super.on(event, ...arguments);
+  }
+
+  override off<K extends keyof TraceShieldEvents>(
+    event: K, 
+    listener: TraceShieldEvents[K]
+  ): this;
+  override off(event: string, listener: (...args: unknown[]) => void): this {
+    return super.off(event, ...arguments);
+  }
+
+  override once<K extends keyof TraceShieldEvents>(
+    event: K, 
+    listener: TraceShieldEvents[K]
+  ): this;
+  override once(event: string, listener: (...args: unknown[]) => void): this {
+    return super.once(event, ...arguments);
+  }
 }
