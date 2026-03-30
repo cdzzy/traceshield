@@ -1,17 +1,39 @@
-# TraceShield
+# traceshield 🛡️
 
-> Agent behavior tracing and protection system.
+**Audit trail and policy enforcement for AI agent actions.**
 
-TraceShield provides comprehensive observability, security, and compliance for multi-agent systems. It records agent actions, enforces shield rules, and detects anomalies in real-time.
+Every action an AI agent takes — tool call, API request, file write, decision — is recorded, attributed, and policy-checked in real time. Like an immutable audit log for your agent fleet.
+
+[![TypeScript](https://img.shields.io/badge/TypeScript-5.0+-blue)](tsconfig.json)
+[![License: Apache-2.0](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
+[![Tests](https://img.shields.io/badge/tests-passing-brightgreen)](tests/)
+
+---
+
+## The Problem
+
+AI agents operate autonomously. When something goes wrong — a bad API call, a policy violation, unexpected output — you need answers:
+
+- **What exactly did the agent do?**
+- **Why did it make that decision?**
+- **Who authorized this action?**
+- **Did it comply with our policies?**
+
+Without traceshield, answering these questions means sifting through unstructured logs. With traceshield, every action is cryptographically chained, attributed, and policy-checked.
+
+---
 
 ## Features
 
-- **Comprehensive Tracing** - Record actions, decisions, tool calls, messages, and errors
-- **Hierarchical Spans** - Parent-child trace relationships for detailed debugging
-- **Shield Rules** - Block, warn, mask, or audit sensitive operations
-- **Anomaly Detection** - Automatic detection of error spikes and rate anomalies
-- **Audit Logging** - Complete compliance trail for all agent activities
-- **Pattern Matching** - Regex-based data filtering and blocking
+- 📝 **Immutable trace log** — every agent action recorded with hash-chain integrity
+- 🔗 **Attribution** — link every action to the agent, user, and trigger that caused it
+- 🚦 **Policy engine** — define rules (YAML or code) that block or flag policy violations
+- 🛡️ **Runtime guard** — intercept actions before they execute and enforce policies
+- 🔍 **Audit queries** — query traces by agent, time, action type, or policy outcome
+- 💾 **Storage adapters** — in-memory, SQLite, PostgreSQL
+- 🔌 **LLM adapters** — OpenAI, LangChain integration out of the box
+
+---
 
 ## Installation
 
@@ -19,229 +41,190 @@ TraceShield provides comprehensive observability, security, and compliance for m
 npm install traceshield
 ```
 
+For persistent storage:
+```bash
+npm install traceshield better-sqlite3   # SQLite
+npm install traceshield pg               # PostgreSQL
+```
+
+---
+
 ## Quick Start
 
 ```typescript
-import { TraceShield } from 'traceshield';
+import { TraceRecorder, RuntimeGuard, PolicyEngine } from 'traceshield';
 
-const shield = new TraceShield({
-  tracing: {
-    enabled: true,
-    level: 'info',
-    sampleRate: 1.0,
-  },
-  shielding: {
-    enabled: true,
-    failClosed: true,
-  },
-  audit: {
-    enabled: true,
-  },
+// 1. Set up policy engine
+const policy = new PolicyEngine();
+policy.loadFromYaml(`
+rules:
+  - name: no-external-api-without-approval
+    match: { action: 'http-request', external: true }
+    require: { approval: true }
+    on_violation: block
+
+  - name: rate-limit-tool-calls
+    match: { action: 'tool-call' }
+    limit: { per_minute: 20, per_agent: true }
+    on_violation: throttle
+
+  - name: log-sensitive-data-access
+    match: { action: 'data-read', tags: ['pii', 'sensitive'] }
+    on_match: flag
+`);
+
+// 2. Wrap your agent with the runtime guard
+const guard = new RuntimeGuard({ policy });
+
+// 3. Record traces
+const recorder = new TraceRecorder({ guard });
+
+// Intercept agent actions
+const trace = await recorder.record({
+  agentId: 'data-processor',
+  action: 'data-read',
+  resource: 'users.csv',
+  tags: ['pii'],
+  metadata: { userId: 'u-123' },
+}, async () => {
+  // Your agent's actual action
+  return await readUserData('users.csv');
 });
 
-// Record an action
-const trace = shield.record('agent-1', 'action', {
-  action: 'fetch-data',
-  target: 'database',
-  result: { rows: 100 },
-});
-
-// Record a decision
-shield.record('agent-1', 'decision', {
-  decision: 'route-to-specialist',
-  inputs: { query: 'medical', confidence: 0.95 },
-  output: 'specialist-agent',
-  reasoning: 'High confidence medical query',
-});
-
-// Record a tool call
-shield.record('agent-1', 'tool_call', {
-  tool: 'search',
-  arguments: { query: 'AI trends' },
-  result: [{ title: 'LLM News', url: '...' }],
-  duration: 150,
-});
-
-// Add shield rule to block sensitive data
-shield.addRule({
-  id: 'block-pii',
-  name: 'Block PII access',
-  enabled: true,
-  priority: 100,
-  conditions: [
-    { type: 'data', field: 'action', operator: 'equals', value: 'read' },
-    { type: 'pattern', field: 'target', pattern: '.*(ssn|credit|password).*' },
-  ],
-  action: 'block',
-  response: 'Access to sensitive data is not allowed',
-});
-
-// Listen to events
-shield.on('shield:blocked', (trace, rule) => {
-  console.log(`Blocked: ${rule.name}`);
-});
-
-shield.on('anomaly:detected', (alert) => {
-  console.log(`Alert: ${alert.description}`);
-});
-
-// Get traces
-const traces = shield.getTraces('agent-1', { limit: 10 });
+console.log(trace.id);          // unique trace ID
+console.log(trace.hash);        // SHA-256 of trace content
+console.log(trace.prevHash);    // links to previous trace (hash chain)
+console.log(trace.policy);      // { outcome: 'flagged', rule: 'log-sensitive-data-access' }
 ```
+
+---
 
 ## Core Concepts
 
-### Trace Types
+### Hash Chain Integrity
 
-| Type | Description |
-|------|-------------|
-| `action` | Agent actions (e.g., fetch data, process) |
-| `decision` | Agent decisions with reasoning |
-| `tool_call` | Tool invocations with arguments |
-| `message` | Inter-agent messages |
-| `resource` | Resource acquire/release operations |
-| `security` | Security events (auth, permission) |
-| `error` | Error conditions |
+Every trace record includes a hash of its content plus a reference to the previous hash — forming an immutable chain:
 
-### Trace Levels
-
-| Level | Description |
-|-------|-------------|
-| `debug` | Detailed debugging info |
-| `info` | General information |
-| `warn` | Warning conditions |
-| `error` | Error conditions |
-| `critical` | Critical issues |
-
-### Shield Actions
-
-| Action | Behavior |
-|--------|----------|
-| `allow` | Permit the operation |
-| `block` | Block and return error |
-| `warn` | Allow but emit warning event |
-| `audit` | Allow but log to audit trail |
-| `mask` | Allow but redact sensitive data |
-
-## Shield Rule Examples
-
-### Block PII Access
-
-```typescript
-shield.addRule({
-  id: 'block-pii',
-  name: 'Block PII',
-  enabled: true,
-  priority: 100,
-  conditions: [
-    { type: 'pattern', field: 'target', pattern: '.*(ssn|credit-card|password).*' },
-  ],
-  action: 'block',
-  response: 'PII access denied',
-});
+```
+Trace #1: hash=abc123, prevHash=null
+Trace #2: hash=def456, prevHash=abc123
+Trace #3: hash=ghi789, prevHash=def456
 ```
 
-### Rate Limiting
+Tampering with any record breaks the chain. Verify integrity:
 
 ```typescript
-shield.addRule({
-  id: 'rate-limit',
-  name: 'Rate limit API calls',
-  enabled: true,
-  priority: 50,
-  conditions: [
-    { type: 'action', action: 'api-call' },
-    { type: 'rate', window: 60_000, maxCount: 100 },
-  ],
-  action: 'block',
-  response: 'Rate limit exceeded',
-});
-```
-
-### Time-Based Access
-
-```typescript
-shield.addRule({
-  id: 'off-hours',
-  name: 'Block off-hours admin',
-  enabled: true,
-  priority: 80,
-  conditions: [
-    { type: 'action', action: 'admin' },
-    { type: 'time', start: '09:00', end: '18:00', days: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'] },
-  ],
-  action: 'block',
-  response: 'Admin operations only during business hours',
-});
-```
-
-## API Overview
-
-### Recording Traces
-
-```typescript
-shield.record(agentId, type, data, options?): Trace
-shield.startSpan(agentId, name, parentId?): Trace
-shield.endSpan(trace, result, duration?): void
-```
-
-### Querying Traces
-
-```typescript
-shield.getTraces(agentId, options?): Trace[]
-shield.getAuditRecords(options?): AuditRecord[]
-```
-
-### Shield Rules
-
-```typescript
-shield.addRule(rule: ShieldRule): void
-shield.removeRule(ruleId: string): boolean
-shield.getRules(): ShieldRule[]
-```
-
-### Events
-
-```typescript
-shield.on('trace:recorded', (trace) => {})
-shield.on('shield:blocked', (trace, rule) => {})
-shield.on('shield:warned', (trace, rule) => {})
-shield.on('anomaly:detected', (alert) => {})
-shield.on('audit:created', (record) => {})
-```
-
-### Metrics
-
-```typescript
-shield.getMetrics(): {
-  traces: { total, byType, byLevel },
-  audit: { total },
-  shields: { active },
+const { valid, brokenAt } = await recorder.verifyChain();
+if (!valid) {
+  console.error(`Chain broken at trace ${brokenAt.id}`);
 }
 ```
 
-## Architecture
+### Policy Engine
 
+Define policies in YAML or TypeScript:
+
+```typescript
+policy.addRule({
+  name: 'require-human-approval-for-deletions',
+  match: (action) => action.type === 'delete',
+  check: async (action) => {
+    const approved = await checkHumanApproval(action);
+    return approved ? 'allow' : 'block';
+  },
+  onViolation: 'block',
+  message: 'Deletion requires human approval',
+});
 ```
-traceshield/
-├── src/
-│   ├── index.ts         # Main exports
-│   ├── types.ts         # Type definitions
-│   └── tracer.ts        # Core TraceShield class
-├── tests/
-└── examples/
+
+### Attribution Analyzer
+
+Trace the root cause of any action:
+
+```typescript
+const attribution = await analyzer.trace(traceId);
+console.log(attribution);
+// {
+//   traceId: 'tr-789',
+//   agentId: 'data-processor',
+//   triggeredBy: { agentId: 'coordinator', traceId: 'tr-456' },
+//   userRequest: { userId: 'u-001', sessionId: 'sess-123' },
+//   causalChain: ['tr-123', 'tr-456', 'tr-789'],
+// }
 ```
+
+---
+
+## LLM Adapters
+
+### OpenAI
+```typescript
+import { OpenAIAdapter } from 'traceshield/adapters/openai';
+
+const tracedClient = new OpenAIAdapter(openai, recorder);
+// All completions, tool calls, and embeddings are automatically traced
+const response = await tracedClient.chat.completions.create({...});
+```
+
+### LangChain
+```typescript
+import { TraceShieldCallbackHandler } from 'traceshield/adapters/langchain';
+
+const handler = new TraceShieldCallbackHandler(recorder);
+const chain = new LLMChain({ ..., callbacks: [handler] });
+```
+
+---
+
+## Audit Queries
+
+```typescript
+// Get all traces for an agent in the last hour
+const traces = await recorder.query({
+  agentId: 'data-processor',
+  from: Date.now() - 3600_000,
+  actionTypes: ['data-read', 'tool-call'],
+});
+
+// Get policy violations
+const violations = await recorder.query({
+  policyOutcome: ['blocked', 'flagged'],
+  limit: 100,
+});
+
+// Full audit report
+const report = await recorder.auditReport({
+  from: startOfDay,
+  to: endOfDay,
+  groupBy: 'agent',
+});
+```
+
+---
 
 ## Comparison
 
-| Feature | TraceShield | Traditional Logging |
-|---------|-------------|---------------------|
-| Structured traces | ✅ | ❌ |
-| Shield rules | ✅ | ❌ |
-| Anomaly detection | ✅ | ❌ |
-| Compliance audit | ✅ | Partial |
-| Pattern matching | ✅ | Partial |
+| Feature | traceshield | LangSmith | Helicone | Custom Logging |
+|---------|------------|-----------|----------|----------------|
+| Hash-chain integrity | ✅ | ❌ | ❌ | ❌ |
+| Policy enforcement | ✅ | ❌ | ❌ | ❌ |
+| Attribution tracing | ✅ | ✅ | ❌ | ❌ |
+| Self-hosted | ✅ | ⚠️ | ❌ | ✅ |
+| LLM adapter SDK | ✅ | ✅ | ✅ | ❌ |
+
+---
+
+## Roadmap
+
+- [ ] Compliance report templates (SOC2, GDPR, HIPAA)
+- [ ] Real-time violation webhooks
+- [ ] Policy-as-code with GitOps integration
+- [ ] Differential privacy for sensitive trace data
+- [ ] `traceshield` CLI for audit investigation
+- [ ] Multi-agent attribution graph visualization
+
+---
 
 ## License
 
-Apache License 2.0
+Apache 2.0 © cdzzy
