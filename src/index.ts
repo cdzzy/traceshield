@@ -9,4 +9,15 @@ export type {
   DashboardConfig,
   DashboardStats,
 } from './dashboard.js';
+export {
+  generateSOC2Report,
+  generateGDPRReport,
+  formatReportAsMarkdown,
+} from './compliance-reports.js';
+export type {
+  ComplianceReport,
+  ComplianceSummary,
+  ViolationSummary,
+  AgentSummary,
+} from './compliance-reports.js';
 export * from './types.js';
