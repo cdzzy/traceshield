@@ -216,13 +216,12 @@ const report = await recorder.auditReport({
 
 ## Roadmap
 
-- [x] ~~Compliance report templates~~ ✅ (src/compliance-reports.ts)
-- [x] **Real-time violation webhooks** (src/webhook-notifier.ts — Slack/PagerDuty/generic HTTP POST on violations)
+- [ ] Compliance report templates (SOC2, GDPR, HIPAA)
+- [ ] Real-time violation webhooks
 - [ ] Policy-as-code with GitOps integration
 - [ ] Differential privacy for sensitive trace data
 - [ ] `traceshield` CLI for audit investigation
 - [ ] Multi-agent attribution graph visualization
-- [x] ~~MCP Event Listener~~ ✅ (automatic tracing and policy enforcement for MCP tool calls)
 
 ---
 
