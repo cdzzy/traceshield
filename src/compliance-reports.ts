@@ -320,18 +320,220 @@ function generateGDPRRecommendations(
   unauthorizedAccess: number
 ): string[] {
   const recs: string[] = [];
-  
+
   if (consentViolations > 0) {
     recs.push(`CRITICAL: ${consentViolations} data access actions without recorded consent. Implement consent tracking immediately.`);
   }
-  
+
   if (unauthorizedAccess > 0) {
     recs.push(`WARNING: ${unauthorizedAccess} unauthorized data access attempts were blocked. Verify blocking rules are correctly configured.`);
   }
-  
+
   recs.push('Conduct Data Protection Impact Assessment (DPIA) for all agent data access patterns.');
   recs.push('Implement data minimization: restrict agents to minimum necessary data access.');
   recs.push('Schedule quarterly GDPR compliance reviews using this report.');
-  
+
+  return recs;
+}
+
+// ─── AI Agent Security Report (AISEC) ─────────────────────────────────────────
+// NIST AI Risk Management Framework aligned report
+
+export interface AISecurityReport extends ComplianceReport {
+  framework: 'NIST AI RMF' | 'ISO 42001';
+  riskLevel: 'minimal' | 'low' | 'medium' | 'high' | 'critical';
+  controlsAssessed: ControlAssessment[];
+}
+
+export interface ControlAssessment {
+  controlId: string;
+  name: string;
+  category: 'govern' | 'map' | 'measure' | 'manage';
+  status: 'implemented' | 'partial' | 'not-implemented' | 'not-applicable';
+  evidence: string[];
+  gaps: string[];
+}
+
+export async function generateAISecurityReport(
+  recorder: TraceRecorder,
+  options: {
+    from?: number;
+    to?: number;
+    framework?: 'NIST AI RMF' | 'ISO 42001';
+  } = {}
+): Promise<AISecurityReport> {
+  const now = Date.now();
+  const from = options.from ?? now - 30 * 24 * 60 * 60 * 1000; // Default: 30 days
+  const to = options.to ?? now;
+  const framework = options.framework ?? 'NIST AI RMF';
+
+  const traces = recorder.query({ from, to });
+
+  // Calculate risk metrics
+  const blockedActions = traces.filter(t => t.outcome === 'blocked');
+  const flaggedActions = traces.filter(t => t.outcome === 'flagged');
+  const policyViolations = traces.filter(t => t.outcome === 'violated');
+
+  const totalRisky = blockedActions.length + flaggedActions.length + policyViolations.length;
+  const complianceRate = traces.length > 0
+    ? ((traces.length - totalRisky) / traces.length) * 100
+    : 100;
+
+  // Assess controls based on trace patterns
+  const controls = assessAIControls(traces, framework);
+
+  // Determine overall risk level
+  const riskLevel = determineRiskLevel(complianceRate, controls);
+
+  const report: AISecurityReport = {
+    title: `AI Agent Security Assessment Report`,
+    generatedAt: new Date().toISOString(),
+    period: { from, to },
+    framework,
+    riskLevel,
+    summary: {
+      totalTraces: traces.length,
+      totalViolations: totalRisky,
+      blockedActions: blockedActions.length,
+      flaggedActions: flaggedActions.length,
+      complianceRate,
+      averageLatencyMs: 0,
+      agentsCovered: new Set(traces.map(t => t.agentId)).size,
+    },
+    violations: aggregateViolations(traces),
+    agents: aggregateAgentMetrics(traces),
+    recommendations: generateAISecurityRecommendations(riskLevel, controls),
+    controlsAssessed: controls,
+    rawData: { framework, standard: framework === 'NIST AI RMF' ? 'NIST AI RMF 1.0' : 'ISO/IEC 42001:2023' },
+  };
+
+  return report;
+}
+
+function assessAIControls(traces: TraceRecord[], framework: string): ControlAssessment[] {
+  const controls: ControlAssessment[] = [];
+
+  // GOVERN controls (for NIST)
+  controls.push({
+    controlId: framework === 'NIST AI RMF' ? 'GV-1' : 'A.5.1',
+    name: 'Organizational accountability for AI systems',
+    category: 'govern',
+    status: traces.length > 0 ? 'implemented' : 'not-implemented',
+    evidence: traces.length > 0 ? [`${traces.length} traces recorded in reporting period`] : [],
+    gaps: [],
+  });
+
+  // MAP controls
+  controls.push({
+    controlId: framework === 'NIST AI RMF' ? 'MAP-1' : 'A.7.1',
+    name: 'Stakeholder consultation for AI use cases',
+    category: 'map',
+    status: 'partial',
+    evidence: [],
+    gaps: ['No documented stakeholder consultation records found'],
+  });
+
+  // MEASURE controls
+  controls.push({
+    controlId: framework === 'NIST AI RMF' ? 'MS-2' : 'A.8.2',
+    name: 'AI system testing and monitoring',
+    category: 'measure',
+    status: traces.length > 0 ? 'implemented' : 'partial',
+    evidence: traces.length > 0 ? [`TraceShield monitoring active with ${traces.length} traces`] : [],
+    gaps: [],
+  });
+
+  // MANAGE controls
+  controls.push({
+    controlId: framework === 'NIST AI RMF' ? 'MG-3' : 'A.9.3',
+    name: 'Incident response for AI failures',
+    category: 'manage',
+    status: 'partial',
+    evidence: [],
+    gaps: ['No AI-specific incident response plan documented'],
+  });
+
+  return controls;
+}
+
+function determineRiskLevel(
+  complianceRate: number,
+  controls: ControlAssessment[]
+): AISecurityReport['riskLevel'] {
+  const unimplementedControls = controls.filter(
+    c => c.status === 'not-implemented' || c.status === 'partial'
+  ).length;
+
+  if (complianceRate < 80 || unimplementedControls > 3) return 'critical';
+  if (complianceRate < 90 || unimplementedControls > 2) return 'high';
+  if (complianceRate < 95 || unimplementedControls > 1) return 'medium';
+  if (complianceRate < 99) return 'low';
+  return 'minimal';
+}
+
+function aggregateViolations(traces: TraceRecord[]): ViolationSummary[] {
+  const violations = traces.filter(t => t.outcome !== 'success');
+  const grouped = new Map<string, TraceRecord[]>();
+
+  for (const trace of violations) {
+    const key = trace.policyId || 'unknown';
+    if (!grouped.has(key)) grouped.set(key, []);
+    grouped.get(key)!.push(trace);
+  }
+
+  return Array.from(grouped.entries()).map(([ruleName, items]) => ({
+    ruleName,
+    count: items.length,
+    severity: 'high' as const,
+    lastOccurred: new Date(Math.max(...items.map(t => t.timestamp))).toISOString(),
+    affectedAgents: [...new Set(items.map(t => t.agentId))],
+    examples: items.slice(0, 3).map(t => t.action),
+  }));
+}
+
+function aggregateAgentMetrics(traces: TraceRecord[]): AgentSummary[] {
+  const byAgent = new Map<string, TraceRecord[]>();
+
+  for (const trace of traces) {
+    if (!byAgent.has(trace.agentId)) byAgent.set(trace.agentId, []);
+    byAgent.get(trace.agentId)!.push(trace);
+  }
+
+  return Array.from(byAgent.entries()).map(([agentId, items]) => {
+    const violations = items.filter(t => t.outcome !== 'success').length;
+    return {
+      agentId,
+      totalActions: items.length,
+      violations,
+      complianceRate: ((items.length - violations) / items.length) * 100,
+      topCapabilities: [...new Set(items.map(t => t.capability))].slice(0, 5),
+    };
+  });
+}
+
+function generateAISecurityRecommendations(
+  riskLevel: AISecurityReport['riskLevel'],
+  controls: ControlAssessment[]
+): string[] {
+  const recs: string[] = [];
+
+  if (riskLevel === 'critical' || riskLevel === 'high') {
+    recs.push(`URGENT: AI system risk level is ${riskLevel}. Immediate review required.`);
+  }
+
+  const gaps = controls.flatMap(c => c.gaps);
+  if (gaps.length > 0) {
+    recs.push(`Control gaps identified: ${gaps.join('; ')}`);
+  }
+
+  const unimplemented = controls.filter(c => c.status === 'not-implemented');
+  if (unimplemented.length > 0) {
+    recs.push(`Implement missing controls: ${unimplemented.map(c => c.controlId).join(', ')}`);
+  }
+
+  recs.push('Establish AI governance board with cross-functional stakeholders.');
+  recs.push('Conduct red team exercises for AI-specific attack vectors.');
+  recs.push('Implement continuous AI model monitoring and drift detection.');
+
   return recs;
 }
