@@ -1,4 +1,4 @@
-import type {
+﻿import type {
   Trace,
   TraceId,
   AgentId,
@@ -26,6 +26,7 @@ import { TypedEventEmitter } from './types.js';
 export class TraceShield extends TypedEventEmitter {
   private config: Required<TraceShieldConfig>;
   private traces = new Map<TraceId, Trace>();
+  private agentTraces = new Map<AgentId, Trace[]>();   // Index: agentId -> traces (for fast lookup)
   private agentSpans = new Map<AgentId, TraceId[]>();  // Active spans per agent
   private shieldRules: ShieldRule[] = [];
   private auditRecords: AuditRecord[] = [];
@@ -121,6 +122,12 @@ export class TraceShield extends TypedEventEmitter {
     // Store trace
     this.traces.set(trace.id, trace);
 
+    // Update agent trace index for fast lookup
+    if (!this.agentTraces.has(agentId)) {
+      this.agentTraces.set(agentId, []);
+    }
+    this.agentTraces.get(agentId)!.push(trace);
+
     // Track active span
     if (!this.agentSpans.has(agentId)) {
       this.agentSpans.set(agentId, []);
@@ -167,6 +174,7 @@ export class TraceShield extends TypedEventEmitter {
 
   /**
    * Get traces for an agent.
+   * Uses agentTraces index for O(1) agent lookup instead of full table scan.
    */
   getTraces(agentId: AgentId, options?: {
     type?: TraceType;
@@ -174,17 +182,21 @@ export class TraceShield extends TypedEventEmitter {
     since?: number;
     limit?: number;
   }): Trace[] {
-    let results: Trace[] = [];
+    // Use index for fast lookup
+    let results = this.agentTraces.get(agentId) ?? [];
 
-    for (const trace of this.traces.values()) {
-      if (trace.agentId !== agentId) continue;
-      if (options?.type && trace.type !== options.type) continue;
-      if (options?.level && this.compareLevel(trace.level, options.level) < 0) continue;
-      if (options?.since && trace.timestamp < options.since) continue;
-      
-      results.push(trace);
+    // Apply filters
+    if (options?.type) {
+      results = results.filter(t => t.type === options.type);
+    }
+    if (options?.level) {
+      results = results.filter(t => this.compareLevel(t.level, options.level) >= 0);
+    }
+    if (options?.since) {
+      results = results.filter(t => t.timestamp >= options.since);
     }
 
+    // Sort by timestamp descending
     results.sort((a, b) => b.timestamp - a.timestamp);
 
     if (options?.limit) {
@@ -467,3 +479,4 @@ export class TraceShield extends TypedEventEmitter {
     return counts;
   }
 }
+
