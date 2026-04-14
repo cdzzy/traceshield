@@ -38,6 +38,9 @@ export class TraceShield extends TypedEventEmitter {
   private lastAnomalyCheck = Date.now();
   private anomalyWindowMs = 60_000;
 
+  // Regex cache for performance
+  private regexCache = new Map<string, RegExp>();
+
   constructor(config: TraceShieldConfig = {}) {
     super();
 
@@ -277,7 +280,7 @@ export class TraceShield extends TypedEventEmitter {
         } else if (condition.operator === 'equals') {
           return fieldValue === condition.value;
         } else if (condition.operator === 'matches') {
-          return new RegExp(condition.value as string).test(String(fieldValue));
+          return this.getRegex(condition.value as string).test(String(fieldValue));
         } else if (condition.operator === 'in') {
           return (condition.value as string[]).includes(String(fieldValue));
         }
@@ -318,12 +321,19 @@ export class TraceShield extends TypedEventEmitter {
       case 'pattern': {
         const fieldValue = this.getFieldValue(condition.field, trace);
         if (fieldValue === undefined) return false;
-        return new RegExp(condition.pattern).test(String(fieldValue));
+        return this.getRegex(condition.pattern).test(String(fieldValue));
       }
 
       default:
         return true;
     }
+  }
+
+  private getRegex(pattern: string): RegExp {
+    if (!this.regexCache.has(pattern)) {
+      this.regexCache.set(pattern, new RegExp(pattern));
+    }
+    return this.regexCache.get(pattern)!;
   }
 
   private getFieldValue(field: string, trace: Trace): unknown {
