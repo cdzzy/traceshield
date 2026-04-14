@@ -1,4 +1,4 @@
-{
+﻿{
   "name": "traceshield",
   "version": "0.1.0",
   "description": "Agent reliability and behavior auditing framework - structured policy constraints, auditable traces, and automatic failure attribution for AI agents",
@@ -31,7 +31,8 @@
     "build": "tsc",
     "test": "vitest run",
     "test:watch": "vitest",
-    "lint": "tsc --noEmit",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint src --ext .ts",
     "clean": "rimraf dist"
   },
   "keywords": [
@@ -83,3 +84,4 @@
     }
   }
 }
+
