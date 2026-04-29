@@ -1,0 +1,14 @@
+﻿node_modules/
+dist/
+*.db
+*.sqlite
+.env
+.env.*
+*.log
+.DS_Store
+Thumbs.db
+*.tgz
+gh.zip
+gh2.zip
+gh_cli/
+

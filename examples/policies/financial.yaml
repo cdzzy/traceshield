@@ -1,0 +1,122 @@
+version: "1.0"
+policies:
+  # =============================================
+  # Financial Agent Policy Set
+  # Designed for regulated financial advisory agents
+  # =============================================
+
+  - name: "sensitive-data-protection"
+    description: "Prevent agent from exposing or processing sensitive financial data in unauthorized ways"
+    priority: 100
+    rules:
+      - id: "no-ssn-in-output"
+        action: "*"
+        condition:
+          output_contains:
+            - "SSN"
+            - "social security"
+            - "credit card number"
+        effect: "deny"
+        message: "Agent output must not contain sensitive personal financial identifiers"
+
+      - id: "no-password-logging"
+        action: "*"
+        condition:
+          input_contains:
+            - "password"
+            - "secret_key"
+            - "api_key"
+        effect: "audit"
+        message: "Action involves potentially sensitive credentials - logged for audit"
+
+  - name: "tool-access-control"
+    description: "Restrict which tools the agent can call"
+    priority: 90
+    rules:
+      - id: "block-direct-transfer"
+        action: "tool_call"
+        condition:
+          tool_name:
+            pattern: "^(transfer_funds|wire_money|send_payment)$"
+        effect: "deny"
+        message: "Direct fund transfers are not allowed. Must go through human approval workflow."
+
+      - id: "block-external-http"
+        action: "tool_call"
+        condition:
+          tool_name:
+            pattern: "^http_(get|post|put|delete)$"
+        effect: "deny"
+        message: "Direct HTTP calls to external services are prohibited. Use approved API wrappers."
+
+      - id: "warn-email-sending"
+        action: "tool_call"
+        condition:
+          tool_name:
+            oneOf: ["send_email", "send_notification"]
+        effect: "warn"
+        message: "Email/notification sending detected - flagged for review"
+
+  - name: "model-usage-limits"
+    description: "Control LLM usage to prevent runaway costs"
+    priority: 80
+    rules:
+      - id: "token-budget"
+        action: "llm_call"
+        condition:
+          token_count:
+            max: 50000
+        effect: "deny"
+        message: "Token budget exceeded (max 50,000 tokens per session)"
+
+      - id: "max-llm-calls"
+        action: "llm_call"
+        condition:
+          call_count:
+            max: 20
+        effect: "warn"
+        message: "High number of LLM calls detected (>20). Check for loops."
+
+  - name: "compliance-guardrails"
+    description: "Ensure compliance with financial regulations"
+    priority: 95
+    rules:
+      - id: "no-investment-advice"
+        action: "llm_call"
+        condition:
+          output_contains:
+            - "guaranteed returns"
+            - "risk-free investment"
+            - "you should invest"
+        effect: "deny"
+        message: "Agent must not provide direct investment advice or guarantee returns"
+
+      - id: "flag-regulatory-terms"
+        action: "*"
+        condition:
+          output_contains:
+            - "insider trading"
+            - "material non-public"
+        effect: "warn"
+        message: "Output contains regulatory-sensitive terms - flagged for compliance review"
+
+  - name: "latency-monitoring"
+    description: "Monitor and flag slow operations"
+    priority: 50
+    rules:
+      - id: "slow-tool-warning"
+        action: "tool_call"
+        condition:
+          latency_ms:
+            max: 5000
+        effect: "warn"
+        message: "Tool call took >5s. Check for performance issues."
+
+      - id: "slow-llm-warning"
+        action: "llm_call"
+        condition:
+          latency_ms:
+            max: 15000
+        effect: "audit"
+        message: "LLM call took >15s. Logged for performance monitoring."
+
