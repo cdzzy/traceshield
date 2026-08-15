@@ -1,9 +1,8 @@
 import { readFileSync } from 'node:fs';
+import { parse as parseYaml } from 'yaml';
 import type {
   PolicySet,
   Policy,
-  PolicyRule,
-  PolicyEffect,
   PolicyEvaluation,
   PolicyDecision,
   EvalContext,
@@ -28,10 +27,7 @@ export class PolicyEngine {
     let parsed: PolicySet;
 
     if (ext === 'yaml' || ext === 'yml') {
-      // Dynamic import would be async; use require-style for sync loading
-      // eslint-disable-next-line @typescript-eslint/no-require-imports
-      const yamlModule = (() => { try { return require('yaml'); } catch { throw new Error('Install "yaml" package to load YAML policy files: npm install yaml'); } })();
-      parsed = yamlModule.parse(content) as PolicySet;
+      parsed = parseYaml(content) as PolicySet;
     } else {
       parsed = JSON.parse(content) as PolicySet;
     }
@@ -40,8 +36,7 @@ export class PolicyEngine {
   }
 
   static fromYaml(yamlContent: string): PolicyEngine {
-    const yamlModule = (() => { try { return require('yaml'); } catch { throw new Error('Install "yaml" package to parse YAML: npm install yaml'); } })();
-    const parsed = yamlModule.parse(yamlContent) as PolicySet;
+    const parsed = parseYaml(yamlContent) as PolicySet;
     return new PolicyEngine(parsed);
   }
 

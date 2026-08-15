@@ -1,16 +1,11 @@
 /**
  * Compliance Report Templates for TraceShield.
- * 
- * Generates audit reports for SOC2, GDPR, and HIPAA compliance.
- * 
- * Reference: Inspired by enterprise compliance automation patterns.
- * 
- * Usage:
- *   import { generateSOC2Report, generateGDPRReport } from './compliance-reports';
+ *
+ * Generates audit reports for SOC2 and GDPR compliance from a set of
+ * recorded traces (new architecture: Trace / Span model).
  */
 
-import { TraceRecorder } from './trace-recorder';
-import type { TraceRecord, PolicyOutcome } from './types';
+import type { Trace, Span } from './types.js';
 
 export interface ComplianceReport {
   title: string;
@@ -28,7 +23,7 @@ export interface ComplianceSummary {
   totalViolations: number;
   blockedActions: number;
   flaggedActions: number;
-  complianceRate: number; // percentage
+  complianceRate: number;
   averageLatencyMs: number;
   agentsCovered: number;
 }
@@ -50,191 +45,150 @@ export interface AgentSummary {
   topCapabilities: string[];
 }
 
-// ─── SOC 2 Compliance Report ─────────────────────────────────────────────────
+function collectViolations(traces: Trace[]): { blocked: number; flagged: number; total: number; spans: Span[]; violations: { rule_id: string; policy_name: string; message?: string; agent_id: string; occurred_at: string; span: Span }[] } {
+  let blocked = 0;
+  let flagged = 0;
+  let total = 0;
+  const violations: { rule_id: string; policy_name: string; message?: string; agent_id: string; occurred_at: string; span: Span }[] = [];
 
-export async function generateSOC2Report(
-  recorder: TraceRecorder,
-  options: {
-    from?: number;
-    to?: number;
-    orgName?: string;
-   auditorName?: string;
-  } = {}
-): Promise<ComplianceReport> {
-  const { from = Date.now() - 30 * 24 * 3600 * 1000, to = Date.now(), orgName = "Your Organization", auditorName = "External Auditor" } = options;
-
-  const traces = await recorder.query({ from, to: to + 1 });
-  
-  const violations: ViolationSummary[] = [];
-  const agentMap = new Map<string, AgentSummary>();
-  
-  let totalViolations = 0;
-  let blockedActions = 0;
-  let flaggedActions = 0;
-  
   for (const trace of traces) {
-    if (trace.policy?.outcome === 'blocked') blockedActions++;
-    else if (trace.policy?.outcome === 'flagged') flaggedActions++;
-    
-    if (trace.policy?.outcome === 'blocked' || trace.policy?.outcome === 'flagged') {
-      totalViolations++;
-      
-      const ruleName = trace.policy?.rule ?? 'unknown';
-      const existing = violations.find(v => v.ruleName === ruleName);
-      if (existing) {
-        existing.count++;
-      } else {
+    for (const span of trace.spans) {
+      for (const evaluation of span.policy_evaluations) {
+        if (evaluation.result === 'deny') blocked++;
+        else if (evaluation.result === 'warn') flagged++;
+        else continue;
+        total++;
         violations.push({
-          ruleName,
-          count: 1,
-          severity: 'medium',
-          lastOccurred: new Date(trace.timestamp).toISOString(),
-          affectedAgents: [trace.agentId],
-          examples: [trace.action],
+          rule_id: evaluation.rule_id,
+          policy_name: evaluation.policy_name,
+          message: evaluation.message,
+          agent_id: trace.agent_id,
+          occurred_at: evaluation.evaluated_at,
+          span,
         });
       }
     }
-    
-    // Agent summary
-    if (!agentMap.has(trace.agentId)) {
-      agentMap.set(trace.agentId, {
-        agentId: trace.agentId,
+  }
+
+  return { blocked, flagged, total, spans: traces.flatMap((t) => t.spans), violations };
+}
+
+// ─── SOC 2 Compliance Report ─────────────────────────────────────────────────
+
+export function generateSOC2Report(
+  traces: Trace[],
+  options: { from?: number; to?: number; orgName?: string; auditorName?: string } = {},
+): ComplianceReport {
+  const { from = Date.now() - 30 * 24 * 3600 * 1000, to = Date.now(), orgName = 'Your Organization', auditorName = 'External Auditor' } = options;
+
+  const { blocked, flagged, total, violations } = collectViolations(traces);
+
+  const violationSummaries: ViolationSummary[] = [];
+  const byRule = new Map<string, ViolationSummary>();
+  for (const v of violations) {
+    const existing = byRule.get(v.rule_id);
+    if (existing) {
+      existing.count++;
+      if (!existing.affectedAgents.includes(v.agent_id)) existing.affectedAgents.push(v.agent_id);
+    } else {
+      const summary: ViolationSummary = {
+        ruleName: v.rule_id,
+        count: 1,
+        severity: 'medium',
+        lastOccurred: v.occurred_at,
+        affectedAgents: [v.agent_id],
+        examples: [v.message ?? v.policy_name],
+      };
+      byRule.set(v.rule_id, summary);
+      violationSummaries.push(summary);
+    }
+  }
+
+  const agentMap = new Map<string, AgentSummary>();
+  for (const trace of traces) {
+    if (!agentMap.has(trace.agent_id)) {
+      agentMap.set(trace.agent_id, {
+        agentId: trace.agent_id,
         totalActions: 0,
         violations: 0,
         complianceRate: 100,
         topCapabilities: [],
       });
     }
-    const agent = agentMap.get(trace.agentId)!;
-    agent.totalActions++;
-    if (trace.policy?.outcome === 'blocked' || trace.policy?.outcome === 'flagged') {
-      agent.violations++;
-    }
+    agentMap.get(trace.agent_id)!.totalActions += trace.spans.length;
   }
-  
-  // Calculate compliance rates
-  const complianceRate = traces.length > 0
-    ? ((traces.length - totalViolations) / traces.length) * 100
-    : 100;
-
+  for (const v of violations) {
+    const agent = agentMap.get(v.agent_id);
+    if (agent) agent.violations++;
+  }
   for (const agent of agentMap.values()) {
     agent.complianceRate = agent.totalActions > 0
       ? ((agent.totalActions - agent.violations) / agent.totalActions) * 100
       : 100;
   }
-  
-  const avgLatency = traces.length > 0
-    ? traces.reduce((s, t) => s + (t.durationMs ?? 0), 0) / traces.length
-    : 0;
 
-  const report: ComplianceReport = {
-    title: `SOC 2 Compliance Audit Report`,
+  const totalActions = traces.reduce((s, t) => s + t.spans.length, 0);
+  const complianceRate = totalActions > 0 ? ((totalActions - total) / totalActions) * 100 : 100;
+  const avgLatency = traces.flatMap((t) => t.spans).reduce((s, span) => s + (span.duration_ms ?? 0), 0) / Math.max(totalActions, 1);
+
+  return {
+    title: 'SOC 2 Compliance Audit Report',
     generatedAt: new Date().toISOString(),
     period: { from, to },
     summary: {
       totalTraces: traces.length,
-      totalViolations,
-      blockedActions,
-      flaggedActions,
+      totalViolations: total,
+      blockedActions: blocked,
+      flaggedActions: flagged,
       complianceRate,
       averageLatencyMs: avgLatency,
       agentsCovered: agentMap.size,
     },
-    violations: violations.sort((a, b) => b.count - a.count),
-    agents: Array.from(agentMap.values()),
-    recommendations: generateRecommendations(complianceRate, violations),
-    rawData: {
-      orgName,
-      auditorName,
-      standard: 'SOC 2 Type II',
-    },
+    violations: violationSummaries.sort((a, b) => b.count - a.count),
+    agents: [...agentMap.values()],
+    recommendations: generateRecommendations(complianceRate, violationSummaries),
+    rawData: { orgName, auditorName, standard: 'SOC 2 Type II' },
   };
-
-  return report;
 }
 
 // ─── GDPR Compliance Report ──────────────────────────────────────────────────
 
-export async function generateGDPRReport(
-  recorder: TraceRecorder,
-  options: {
-    from?: number;
-    to?: number;
-    dataController?: string;
-  } = {}
-): Promise<ComplianceReport> {
-  const { from = Date.now() - 30 * 24 * 3600 * 1000, to = Date.now(), dataController = "Data Controller" } = options;
+export function generateGDPRReport(
+  traces: Trace[],
+  options: { from?: number; to?: number; dataController?: string } = {},
+): ComplianceReport {
+  const { from = Date.now() - 30 * 24 * 3600 * 1000, to = Date.now(), dataController = 'Data Controller' } = options;
 
-  const traces = await recorder.query({ from, to: to + 1 });
-  
-  // GDPR-specific: look for data access traces
-  const dataAccessTraces = traces.filter(t =>
-    t.action.includes('data-read') ||
-    t.action.includes('pii') ||
-    (t.tags?.includes('pii')) ||
-    (t.tags?.includes('personal-data'))
-  );
-  
-  const consentViolations = dataAccessTraces.filter(t =>
-    !t.metadata?.consentGiven
-  );
-  
-  const unauthorizedAccess = dataAccessTraces.filter(t =>
-    t.policy?.outcome === 'blocked'
-  );
+  const { blocked, flagged, total, violations } = collectViolations(traces);
 
-  const complianceRate = dataAccessTraces.length > 0
-    ? ((dataAccessTraces.length - consentViolations.length - unauthorizedAccess.length) / dataAccessTraces.length) * 100
+  const complianceRate = traces.reduce((s, t) => s + t.spans.length, 0) > 0
+    ? ((traces.reduce((s, t) => s + t.spans.length, 0) - total) / traces.reduce((s, t) => s + t.spans.length, 0)) * 100
     : 100;
 
-  const report: ComplianceReport = {
-    title: `GDPR Compliance Report`,
+  return {
+    title: 'GDPR Compliance Report',
     generatedAt: new Date().toISOString(),
     period: { from, to },
     summary: {
-      totalTraces: dataAccessTraces.length,
-      totalViolations: consentViolations.length + unauthorizedAccess.length,
-      blockedActions: unauthorizedAccess.length,
-      flaggedActions: consentViolations.length,
+      totalTraces: traces.length,
+      totalViolations: total,
+      blockedActions: blocked,
+      flaggedActions: flagged,
       complianceRate,
       averageLatencyMs: 0,
-      agentsCovered: new Set(dataAccessTraces.map(t => t.agentId)).size,
+      agentsCovered: new Set(violations.map((v) => v.agent_id)).size,
     },
-    violations: [
-      {
-        ruleName: 'consent-required',
-        count: consentViolations.length,
-        severity: 'critical',
-        lastOccurred: consentViolations.length > 0
-          ? new Date(Math.max(...consentViolations.map(t => t.timestamp))).toISOString()
-          : new Date().toISOString(),
-        affectedAgents: [...new Set(consentViolations.map(t => t.agentId))],
-        examples: consentViolations.slice(0, 3).map(t => t.action),
-      },
-      {
-        ruleName: 'unauthorized-data-access',
-        count: unauthorizedAccess.length,
-        severity: 'critical',
-        lastOccurred: unauthorizedAccess.length > 0
-          ? new Date(Math.max(...unauthorizedAccess.map(t => t.timestamp))).toISOString()
-          : new Date().toISOString(),
-        affectedAgents: [...new Set(unauthorizedAccess.map(t => t.agentId))],
-        examples: unauthorizedAccess.slice(0, 3).map(t => t.action),
-      },
-    ].filter(v => v.count > 0),
+    violations: [],
     agents: [],
-    recommendations: generateGDPRRecommendations(consentViolations.length, unauthorizedAccess.length),
+    recommendations: generateGDPRRecommendations(blocked, flagged),
     rawData: { dataController, standard: 'GDPR Article 30, 35' },
   };
-
-  return report;
 }
 
 // ─── Report Formatting ────────────────────────────────────────────────────────
 
 export function formatReportAsMarkdown(report: ComplianceReport): string {
   const lines: string[] = [];
-  
   lines.push(`# ${report.title}`);
   lines.push('');
   lines.push(`**Generated:** ${report.generatedAt}`);
@@ -244,8 +198,8 @@ export function formatReportAsMarkdown(report: ComplianceReport): string {
   lines.push('');
   lines.push('## Summary');
   lines.push('');
-  lines.push(`| Metric | Value |`);
-  lines.push(`|--------|-------|`);
+  lines.push('| Metric | Value |');
+  lines.push('|--------|-------|');
   lines.push(`| Total Traces | ${report.summary.totalTraces} |`);
   lines.push(`| Total Violations | ${report.summary.totalViolations} |`);
   lines.push(`| Blocked Actions | ${report.summary.blockedActions} |`);
@@ -253,7 +207,7 @@ export function formatReportAsMarkdown(report: ComplianceReport): string {
   lines.push(`| Compliance Rate | ${report.summary.complianceRate.toFixed(1)}% |`);
   lines.push(`| Agents Covered | ${report.summary.agentsCovered} |`);
   lines.push('');
-  
+
   if (report.violations.length > 0) {
     lines.push('## Violations');
     lines.push('');
@@ -264,18 +218,18 @@ export function formatReportAsMarkdown(report: ComplianceReport): string {
     }
     lines.push('');
   }
-  
+
   if (report.agents.length > 0) {
     lines.push('## Agent Breakdown');
     lines.push('');
-    lines.push(`| Agent | Actions | Violations | Compliance |`);
-    lines.push(`|-------|---------|------------|------------|`);
+    lines.push('| Agent | Actions | Violations | Compliance |');
+    lines.push('|-------|---------|------------|------------|');
     for (const a of report.agents) {
       lines.push(`| ${a.agentId} | ${a.totalActions} | ${a.violations} | ${a.complianceRate.toFixed(1)}% |`);
     }
     lines.push('');
   }
-  
+
   if (report.recommendations.length > 0) {
     lines.push('## Recommendations');
     lines.push('');
@@ -284,55 +238,26 @@ export function formatReportAsMarkdown(report: ComplianceReport): string {
     }
     lines.push('');
   }
-  
+
   return lines.join('\n');
 }
 
-// ─── Helpers ──────────────────────────────────────────────────────────────────
-
-function generateRecommendations(
-  complianceRate: number,
-  violations: ViolationSummary[]
-): string[] {
+function generateRecommendations(complianceRate: number, violations: ViolationSummary[]): string[] {
   const recs: string[] = [];
-  
   if (complianceRate < 95) {
-    recs.push(`URGENT: Compliance rate (${complianceRate.toFixed(1)}%) below 95% threshold. Review blocking rules and agent training.`);
+    recs.push(`URGENT: Compliance rate (${complianceRate.toFixed(1)}%) below 95% threshold.`);
   }
-  
-  if (violations.filter(v => v.severity === 'critical').length > 0) {
-    recs.push(`CRITICAL violations detected. Implement immediate remediation for: ${violations.filter(v => v.severity === 'critical').map(v => v.ruleName).join(', ')}`);
+  if (violations.filter((v) => v.severity === 'critical').length > 0) {
+    recs.push(`CRITICAL violations detected. Review: ${violations.filter((v) => v.severity === 'critical').map((v) => v.ruleName).join(', ')}`);
   }
-  
-  const highVolumeViolations = violations.filter(v => v.count > 10);
-  if (highVolumeViolations.length > 0) {
-    recs.push(`High-volume violations (${highVolumeViolations.map(v => `${v.ruleName} (${v.count})`).join(', ')}) suggest systemic issues. Consider policy tuning.`);
-  }
-  
   recs.push('Implement quarterly automated compliance reviews.');
-  recs.push('Consider adding LLM-as-judge for semantic policy evaluation.');
-  
   return recs;
 }
 
-function generateGDPRRecommendations(
-  consentViolations: number,
-  unauthorizedAccess: number
-): string[] {
+function generateGDPRRecommendations(blocked: number, flagged: number): string[] {
   const recs: string[] = [];
-  
-  if (consentViolations > 0) {
-    recs.push(`CRITICAL: ${consentViolations} data access actions without recorded consent. Implement consent tracking immediately.`);
-  }
-  
-  if (unauthorizedAccess > 0) {
-    recs.push(`WARNING: ${unauthorizedAccess} unauthorized data access attempts were blocked. Verify blocking rules are correctly configured.`);
-  }
-  
+  if (blocked > 0) recs.push(`WARNING: ${blocked} unauthorized data access attempts were blocked.`);
+  if (flagged > 0) recs.push(`NOTICE: ${flagged} actions flagged for data-access review.`);
   recs.push('Conduct Data Protection Impact Assessment (DPIA) for all agent data access patterns.');
-  recs.push('Implement data minimization: restrict agents to minimum necessary data access.');
-  recs.push('Schedule quarterly GDPR compliance reviews using this report.');
-  
   return recs;
 }
-

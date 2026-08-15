@@ -1,5 +1,4 @@
 import type { TraceShield } from '../index.js';
-import type { RuntimeGuard } from '../runtime-guard.js';
 
 /**
  * LangChain adapter.
@@ -32,20 +31,9 @@ export function createLangChainCallbacks(
   config: { agentId: string; sessionId?: string },
 ): LangChainCallbackHandler {
   const guard = shield.createGuard(config);
-  let currentSpanId: string | null = null;
-  let currentStartTime: number | null = null;
 
   return {
     async handleLLMStart(llm, prompts) {
-      const traceId = guard.getTraceId();
-      if (!traceId) {
-        // Guard will auto-create trace on first execute call
-        // We do a pre-flight trace start by executing a lightweight span
-      }
-      currentStartTime = Date.now();
-
-      // We use execute in a "record only" way by immediately resolving
-      // The actual LLM call is handled by LangChain
       try {
         await guard.execute(
           'llm_call',
@@ -54,27 +42,22 @@ export function createLangChainCallbacks(
             input: { prompts },
             metadata: { provider: 'langchain' },
           },
-          async () => {
-            // Just record — LangChain handles actual execution
-            return { _pending: true };
-          },
+          async () => ({ _pending: true }),
         );
       } catch {
-        // Swallow policy errors — they'll be logged in the trace
+        // Policy errors are logged in the trace
       }
     },
 
-    async handleLLMEnd(output) {
-      // LLM completed — output is recorded via the trace system
-      currentStartTime = null;
+    async handleLLMEnd(_output) {
+      // LLM completed — recorded via the trace system
     },
 
-    async handleLLMError(error) {
-      currentStartTime = null;
+    async handleLLMError(_error) {
+      // Recorded via the trace system
     },
 
     async handleToolStart(tool, input) {
-      currentStartTime = Date.now();
       try {
         await guard.execute(
           'tool_call',
@@ -91,15 +74,14 @@ export function createLangChainCallbacks(
     },
 
     async handleToolEnd(_output) {
-      currentStartTime = null;
+      // Recorded via the trace system
     },
 
     async handleToolError(_error) {
-      currentStartTime = null;
+      // Recorded via the trace system
     },
 
     async handleChainStart(chain, inputs) {
-      currentStartTime = Date.now();
       try {
         await guard.execute(
           'decision',
@@ -124,4 +106,3 @@ export function createLangChainCallbacks(
     },
   };
 }
-

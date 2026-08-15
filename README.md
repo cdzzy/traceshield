@@ -32,6 +32,13 @@ Without traceshield, answering these questions means sifting through unstructure
 - 🔍 **Audit queries** — query traces by agent, time, action type, or policy outcome
 - 💾 **Storage adapters** — in-memory, SQLite, PostgreSQL
 - 🔌 **LLM adapters** — OpenAI, LangChain integration out of the box
+- 🚨 **Violation webhooks** — real-time Slack/SIEM alerts on policy violations (v0.2.0)
+- 🧪 **Prompt injection detection** — multi-layer pattern-based prevention (v0.2.0)
+- 📈 **Behavior baseline** — anomaly detection via per-agent learning (v0.2.0)
+- 🔴 **Red team toolkit** — adversarial attack scenarios (v0.2.0)
+- 🧠 **Threat intel feed** — dynamic policy updates from MISP/OpenCTI (v0.2.0)
+- 📦 **Compliance export** — JSON-LD / CEF / JSON with integrity proof (v0.2.0)
+- 🔐 **ZK compliance proofs** — privacy-preserving audits (v0.2.0)
 
 ---
 
@@ -216,8 +223,14 @@ const report = await recorder.auditReport({
 
 ## Roadmap
 
-- [ ] Compliance report templates (SOC2, GDPR, HIPAA)
-- [ ] Real-time violation webhooks
+- [x] Compliance report templates (SOC2, GDPR) ✅ (src/compliance-reports.ts)
+- [x] Real-time violation webhooks ✅ (src/webhook-notifier.ts, v0.2.0)
+- [x] Prompt injection detection ✅ (src/injection-detector.ts, v0.2.0)
+- [x] Behavior baseline learning ✅ (src/behavior-baseline.ts, v0.2.0)
+- [x] Red team toolkit ✅ (src/red-team.ts, v0.2.0)
+- [x] Threat intelligence integration ✅ (src/threat-intel.ts, v0.2.0)
+- [x] Tamper-evident audit export (JSON-LD / CEF) ✅ (src/compliance-exporter.ts, v0.2.0)
+- [x] ZK compliance proofs ✅ (src/zk-compliance.ts, v0.2.0)
 - [ ] Policy-as-code with GitOps integration
 - [ ] Differential privacy for sensitive trace data
 - [ ] `traceshield` CLI for audit investigation

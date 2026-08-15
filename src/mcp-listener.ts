@@ -21,9 +21,9 @@
  *   });
  */
 
-import { TraceRecorder } from './trace-recorder';
-import { PolicyEngine, PolicyRule } from './policy-engine';
-import { AgentId } from './types';
+import { TraceRecorder } from './trace-recorder.js';
+import { PolicyEngine } from './policy-engine.js';
+import type { AgentId, EvalContext } from './types.js';
 
 // ---- MCP Event Types ----
 
@@ -65,10 +65,11 @@ export interface MCPPolicyConfig {
   defaultAction: 'allow' | 'block' | 'warn';
 }
 
-export interface MCPPolicyRule extends Partial<PolicyRule> {
+export interface MCPPolicyRule {
   name: string;
   toolPattern?: string | RegExp;
   argumentPatterns?: Record<string, string | RegExp>;
+  action?: 'block' | 'warn' | 'allow' | 'throttle' | 'require_approval';
   rateLimit?: {
     perMinute?: number;
     perHour?: number;
@@ -153,15 +154,15 @@ export class MCPEventListener {
     }
 
     // Check policy
-    const policyAction = await this.checkPolicy(event);
+    const policyDecision = this.checkPolicy(event);
 
     // Record the call event
     this.recordEvent(event);
 
     // Handle based on policy action
-    if (policyAction === 'block') {
+    if (policyDecision.action === 'block') {
       const blockedEvent = { ...event, type: 'tool_error' as const };
-      blockedEvent.error = new Error(`Blocked by policy: ${policyAction.reason}`);
+      blockedEvent.error = new Error(`Blocked by policy: ${policyDecision.reason ?? 'policy rule'}`);
       blockedEvent.duration = Date.now() - startTime;
       this.recordEvent(blockedEvent);
 
@@ -172,7 +173,7 @@ export class MCPEventListener {
       };
     }
 
-    if (policyAction === 'require_approval') {
+    if (policyDecision.action === 'require_approval') {
       return {
         result: null,
         allowed: false,
@@ -184,7 +185,7 @@ export class MCPEventListener {
     return {
       result: undefined, // Actual result would come from the tool
       allowed: true,
-      action: policyAction === 'warn' ? 'warn' : 'allow',
+      action: policyDecision.action === 'warn' ? 'warn' : 'allow',
     };
   }
 
@@ -301,52 +302,44 @@ export class MCPEventListener {
     if (this.eventHistory.length > 10000) {
       this.eventHistory = this.eventHistory.slice(-5000);
     }
-
-    // Record to trace recorder if available
-    if (this.config.recorder && event.type !== 'tool_call') {
-      this.config.recorder.record({
-        agentId: event.agentId,
-        action: event.type,
-        resource: event.toolName,
-        metadata: {
-          mcpEventId: event.id,
-          arguments: event.arguments,
-          result: event.result,
-          error: event.error?.message,
-          duration: event.duration,
-        },
-      });
-    }
   }
 
-  private checkPolicy(event: MCPEvent): MCPActionResult & { reason?: string } {
+  private checkPolicy(event: MCPEvent): { action: MCPActionResult; reason?: string } {
     // Default: allow
     if (!this.config.policyEngine) {
-      return 'allow';
+      return { action: 'allow' };
     }
 
-    // Check against policy engine
-    const result = this.config.policyEngine.evaluate({
-      action: event.type,
-      resource: event.toolName,
+    const context: EvalContext = {
+      action_type: 'tool_call',
+      action_name: event.toolName,
+      input: event.arguments,
       metadata: {
         agentId: event.agentId,
         arguments: event.arguments,
         sessionId: event.sessionId,
       },
-    });
+      trace_id: event.id,
+      span_count: this.eventHistory.length,
+      elapsed_ms: event.duration ?? 0,
+    };
 
-    if (result.action === 'block') {
-      return { ...result.action, reason: result.reason };
+    const decision = this.config.policyEngine.evaluatePre(context);
+
+    if (!decision.allowed) {
+      return {
+        action: 'block',
+        reason: decision.blocked_by?.message ?? decision.blocked_by?.rule_id,
+      };
     }
 
-    return result.action as MCPActionResult;
+    const hasWarn = decision.evaluations.some((e) => e.result === 'warn');
+    return { action: hasWarn ? 'warn' : 'allow' };
   }
 
   private checkRateLimit(event: MCPEvent): { limited: boolean; message?: string } {
     const now = Date.now();
     const minuteKey = `minute:${event.agentId}:${event.toolName}`;
-    const hourKey = `hour:${event.agentId}:${event.toolName}`;
 
     // Check per-minute limit
     let minuteCount = this.rateLimitCounts.get(minuteKey);
@@ -411,7 +404,7 @@ export class MCPToolWrapper {
     }
 
     // Intercept with listener
-    const { result: interceptResult, allowed, action } = await this.listener.intercept(
+    const { allowed, action } = await this.listener.intercept(
       toolName,
       arguments_,
       this.agentContext

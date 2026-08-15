@@ -36,6 +36,10 @@ import type { StoredViolation } from './types.js';
 export type WebhookEventType = 'blocked' | 'flagged' | 'throttled' | 'allowed';
 export type WebhookType = 'generic' | 'slack';
 
+function outcomeFor(effect: StoredViolation['effect']): WebhookEventType {
+  return effect === 'deny' ? 'blocked' : 'flagged';
+}
+
 export interface WebhookEndpoint {
   /** Unique identifier for this endpoint */
   id: string;
@@ -83,7 +87,7 @@ export class WebhookNotifier {
    * @returns The endpoint ID (for removal later)
    */
   addEndpoint(config: Omit<WebhookEndpoint, 'id'>): string {
-    const id = config.id ?? `webhook-${++this.idCounter}`;
+    const id = `webhook-${++this.idCounter}`;
     this.endpoints.set(id, {
       ...config,
       id,
@@ -125,7 +129,7 @@ export class WebhookNotifier {
    * Failures are logged but do not throw — webhook delivery is best-effort.
    */
   async notify(violation: StoredViolation): Promise<void> {
-    const event: WebhookEventType = violation.outcome as WebhookEventType;
+    const event: WebhookEventType = outcomeFor(violation.effect);
     const payload = this._buildPayload(violation);
 
     const matching = Array.from(this.endpoints.values()).filter(
@@ -141,16 +145,17 @@ export class WebhookNotifier {
    * Build the webhook payload from a violation.
    */
   private _buildPayload(violation: StoredViolation): WebhookPayload {
+    const event: WebhookEventType = outcomeFor(violation.effect);
     return {
-      event: violation.outcome as WebhookEventType,
+      event,
       timestamp: new Date().toISOString(),
       violation,
       summary: {
-        outcome: violation.outcome,
-        agentId: violation.agentId,
-        actionType: violation.actionType,
-        policyName: violation.policyName ?? null,
-        message: violation.message ?? `Policy ${violation.policyName ?? 'unknown'} violation`,
+        outcome: event,
+        agentId: violation.agent_id,
+        actionType: violation.context.action_type,
+        policyName: violation.policy_name,
+        message: violation.message ?? `Policy ${violation.policy_name} violation`,
       },
     };
   }
@@ -242,7 +247,7 @@ export class WebhookNotifier {
               type: 'context',
               elements: [
                 { type: 'mrkdwn', text: `Time: ${new Date(payload.timestamp).toLocaleString()}` },
-                { type: 'mrkdwn', text: `Trace ID: \`${violation?.traceId ?? 'N/A'}\`` },
+                { type: 'mrkdwn', text: `Trace ID: \`${violation?.trace_id ?? 'N/A'}\`` },
               ],
             },
           ],

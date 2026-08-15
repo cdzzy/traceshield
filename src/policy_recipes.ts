@@ -14,8 +14,8 @@ export interface PolicyRule {
   severity: "critical" | "high" | "medium" | "low";
   pattern?: RegExp;         // 内容模式匹配
   maxLength?: number;       // 输出长度限制
-  allowedPatterns?: string[];
-  blockedPatterns?: string[];
+  allowedPatterns?: RegExp[];
+  blockedPatterns?: RegExp[];
   rateLimit?: {
     maxPerMinute: number;
     maxPerHour: number;

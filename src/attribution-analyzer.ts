@@ -6,7 +6,6 @@ import type {
   RootCause,
   CausalLink,
   TimelineEvent,
-  FailureType,
   Severity,
 } from './types.js';
 

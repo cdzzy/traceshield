@@ -15,7 +15,7 @@
 
 import { TraceRecorder } from './trace-recorder.js';
 import { PolicyEngine } from './policy-engine.js';
-import type { Trace, PolicyViolation, AuditStats } from './types.js';
+import type { Trace, StoredViolation } from './types.js';
 
 export interface DashboardConfig {
   port?: number;
@@ -106,7 +106,6 @@ export class AuditDashboard {
   async start(): Promise<void> {
     // Dynamic import to avoid Node.js-specific code in browser bundles
     const http = await import('http');
-    const url = await import('url');
 
     this.server = http.createServer((req: any, res: any) => {
       this.handleRequest(req, res);
@@ -569,11 +568,13 @@ export class AuditDashboard {
    */
   recordTrace(trace: Trace): void {
     this.stats.totalTraces++;
-    
+
     // Update action counts
-    this.stats.actions.byType[trace.action] = 
-      (this.stats.actions.byType[trace.action] || 0) + 1;
-    
+    for (const span of trace.spans) {
+      this.stats.actions.byType[span.action_type] =
+        (this.stats.actions.byType[span.action_type] || 0) + 1;
+    }
+
     // Add to recent traces
     this.stats.actions.recent.unshift(trace);
     if (this.stats.actions.recent.length > this.config.maxTraces) {
@@ -582,13 +583,13 @@ export class AuditDashboard {
 
     // Update agent stats
     const agentIndex = this.stats.agents.topAgents.findIndex(
-      a => a.agentId === trace.agentId
+      a => a.agentId === trace.agent_id
     );
     if (agentIndex >= 0) {
       this.stats.agents.topAgents[agentIndex].traceCount++;
     } else {
       this.stats.agents.topAgents.push({
-        agentId: trace.agentId,
+        agentId: trace.agent_id,
         traceCount: 1,
       });
     }
@@ -604,18 +605,18 @@ export class AuditDashboard {
   /**
    * Record a policy violation
    */
-  recordViolation(violation: PolicyViolation): void {
+  recordViolation(violation: StoredViolation): void {
     this.stats.violations.total++;
-    
-    if (violation.outcome === 'blocked') {
+
+    if (violation.effect === 'deny') {
       this.stats.violations.blocked++;
-    } else if (violation.outcome === 'flagged') {
+    } else {
       this.stats.violations.flagged++;
     }
 
     // Update by-rule counts
-    const ruleName = violation.rule || 'unknown';
-    this.stats.violations.byRule[ruleName] = 
+    const ruleName = violation.rule_id || 'unknown';
+    this.stats.violations.byRule[ruleName] =
       (this.stats.violations.byRule[ruleName] || 0) + 1;
   }
 }
