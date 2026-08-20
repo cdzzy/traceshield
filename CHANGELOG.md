@@ -2,6 +2,16 @@
 
 All notable changes to TraceShield are documented in this file.
 
+## [0.3.0] - 2026-08-19
+
+### Added
+
+- **`traceshield` CLI for audit investigation**: `status`, `traces`, `violations`, and `verify` commands load a JSON audit export and let you inspect traces/violations and check hash-chain integrity. Errors are typed (`CliError`); the bin entry lives in `cli-main.ts`.
+
+### Changed
+
+- `TraceShieldExporter` gains a lossless `full` export format that includes complete spans and policy evaluations (the `json` format remains a summary).
+
 ## [0.2.0] - 2026-08-15
 
 ### Added

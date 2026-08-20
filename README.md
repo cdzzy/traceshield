@@ -233,7 +233,7 @@ const report = await recorder.auditReport({
 - [x] ZK compliance proofs ✅ (src/zk-compliance.ts, v0.2.0)
 - [ ] Policy-as-code with GitOps integration
 - [ ] Differential privacy for sensitive trace data
-- [ ] `traceshield` CLI for audit investigation
+- [x] **`traceshield` CLI for audit investigation** (`status` / `traces` / `violations` / `verify`, with lossless `full` export) ✅ (v0.3.0)
 - [ ] Multi-agent attribution graph visualization
 
 ---

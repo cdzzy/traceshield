@@ -9,7 +9,7 @@ import type { Trace } from './types.js';
 import { verifySpanChain } from './hash-chain.js';
 
 export interface ExportOptions {
-  format: 'json' | 'json-ld' | 'cef';
+  format: 'json' | 'json-ld' | 'cef' | 'full';
   includeIntegrityProof?: boolean;
 }
 
@@ -35,6 +35,8 @@ export class TraceShieldExporter {
         return JSON.stringify(this.toJsonLd(), null, 2);
       case 'cef':
         return this.toCef();
+      case 'full':
+        return JSON.stringify(this.toFull(), null, 2);
       case 'json':
       default:
         return JSON.stringify(this.toJson(options.includeIntegrityProof), null, 2);
@@ -69,6 +71,19 @@ export class TraceShieldExporter {
         status: t.status,
         integrity_hash: t.integrity_hash,
         span_count: t.spans.length,
+      })),
+    };
+  }
+
+  /** Lossless export: full traces including spans and policy evaluations. */
+  private toFull(): Record<string, unknown> {
+    return {
+      exported_at: new Date().toISOString(),
+      trace_count: this.traces.length,
+      integrity_proof: this.verify(),
+      traces: this.traces.map((t) => ({
+        ...t,
+        spans: t.spans,
       })),
     };
   }

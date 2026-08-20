@@ -1,10 +1,13 @@
 {
   "name": "traceshield",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Agent reliability and behavior auditing framework - structured policy constraints, auditable traces, and automatic failure attribution for AI agents",
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
+  "bin": {
+    "traceshield": "./dist/cli-main.js"
+  },
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
