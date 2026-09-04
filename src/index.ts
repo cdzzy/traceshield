@@ -60,4 +60,8 @@ export type { ExportOptions, ExportVerification } from './compliance-exporter.js
 export { ZKComplianceProver } from './zk-compliance.js';
 export type { ZKComplianceProof, ZKVerification } from './zk-compliance.js';
 
+// Multi-agent attribution graph visualization
+export { buildAttributionGraph, renderMermaid, renderDot } from './attribution-graph.js';
+export type { AttributionGraph, GraphNode, GraphEdge, GraphNodeKind } from './attribution-graph.js';
+
 export * from './types.js';

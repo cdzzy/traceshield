@@ -234,7 +234,7 @@ const report = await recorder.auditReport({
 - [ ] Policy-as-code with GitOps integration
 - [ ] Differential privacy for sensitive trace data
 - [x] **`traceshield` CLI for audit investigation** (`status` / `traces` / `violations` / `verify`, with lossless `full` export) ✅ (v0.3.0)
-- [ ] Multi-agent attribution graph visualization
+- [x] **Multi-agent attribution graph visualization** (agent→action→policy Mermaid/DOT rendering) ✅ (v0.4.0)
 
 ---
 

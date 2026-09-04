@@ -2,6 +2,12 @@
 
 All notable changes to TraceShield are documented in this file.
 
+## [0.4.0] - 2026-08-27
+
+### Added
+
+- **Multi-agent attribution graph visualization**: `buildAttributionGraph` aggregates traces into an agent→action→policy graph; `renderMermaid` / `renderDot` render it for dashboards and audit reports, with counts on repeated edges and sanitized labels.
+
 ## [0.3.0] - 2026-08-19
 
 ### Added
