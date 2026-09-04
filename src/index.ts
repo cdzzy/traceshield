@@ -64,4 +64,8 @@ export type { ZKComplianceProof, ZKVerification } from './zk-compliance.js';
 export { buildAttributionGraph, renderMermaid, renderDot } from './attribution-graph.js';
 export type { AttributionGraph, GraphNode, GraphEdge, GraphNodeKind } from './attribution-graph.js';
 
+// Policy-as-code validation + diffing (GitOps)
+export { validatePolicySet, diffPolicySets, renderDiffMarkdown } from './policy-gitops.js';
+export type { PolicyIssue, PolicyValidationReport, PolicyDiff } from './policy-gitops.js';
+
 export * from './types.js';

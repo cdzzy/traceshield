@@ -231,7 +231,7 @@ const report = await recorder.auditReport({
 - [x] Threat intelligence integration ✅ (src/threat-intel.ts, v0.2.0)
 - [x] Tamper-evident audit export (JSON-LD / CEF) ✅ (src/compliance-exporter.ts, v0.2.0)
 - [x] ZK compliance proofs ✅ (src/zk-compliance.ts, v0.2.0)
-- [ ] Policy-as-code with GitOps integration
+- [x] **Policy-as-code + GitOps** (`validatePolicySet` CI gate + `diffPolicySets` PR review with Markdown rendering) ✅ (v0.5.0)
 - [ ] Differential privacy for sensitive trace data
 - [x] **`traceshield` CLI for audit investigation** (`status` / `traces` / `violations` / `verify`, with lossless `full` export) ✅ (v0.3.0)
 - [x] **Multi-agent attribution graph visualization** (agent→action→policy Mermaid/DOT rendering) ✅ (v0.4.0)

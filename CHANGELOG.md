@@ -2,6 +2,12 @@
 
 All notable changes to TraceShield are documented in this file.
 
+## [0.5.0] - 2026-09-04
+
+### Added
+
+- **Policy-as-code + GitOps**: `validatePolicySet` is a CI gate that flags duplicate rule ids, unknown actions/effects, unconditional rules, and deny rules without messages; `diffPolicySets` + `renderDiffMarkdown` render rule-level diffs (added/removed/changed) for PR review.
+
 ## [0.4.0] - 2026-08-27
 
 ### Added
