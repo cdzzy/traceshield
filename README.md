@@ -1,5 +1,8 @@
 # traceshield 🛡️
 
+> Part of the [Agent OS](https://github.com/cdzzy/agent-kernel/blob/main/docs/agent-os.md) suite — kernel · network · memory · policy · audit · testing
+
+
 **Audit trail and policy enforcement for AI agent actions.**
 
 Every action an AI agent takes — tool call, API request, file write, decision — is recorded, attributed, and policy-checked in real time. Like an immutable audit log for your agent fleet.
