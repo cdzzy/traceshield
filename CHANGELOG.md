@@ -2,6 +2,15 @@
 
 All notable changes to TraceShield are documented in this file.
 
+## [0.6.0] - 2026-09-20
+
+### Added
+
+- **MCP configuration scanner** (`src/mcp-scanner.ts`): audit MCP server configs for supply-chain and instruction-injection risk with rules MCP000–MCP007 — invalid config, overridden instructions, hidden Unicode, permissive permissions, shell execution, secrets + network in one server, wildcard mounts, root-directory mounts. The filesystem is injected, so scanning is fully testable.
+- **CLI**: `traceshield scan [--json]` walks a path tree and exits non-zero on high/critical findings — drop it into CI as a gate.
+- **OWASP mapping** (`docs/owasp-asi-mapping.md`): capability × ASI01–ASI10 matrix documenting which TraceShield feature covers which agentic-security risk.
+- **Release automation** (`.github/workflows/release.yml`): npm publish with provenance on `v*` tags, refused when the tag doesn't match `package.json` version.
+
 ## [0.5.0] - 2026-09-04
 
 ### Added

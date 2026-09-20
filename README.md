@@ -1,16 +1,35 @@
 # traceshield 🛡️
 
 > Part of the [Agent OS](https://github.com/cdzzy/agent-kernel/blob/main/docs/agent-os.md) suite — kernel · network · memory · policy · audit · testing
-[![npm](https://img.shields.io/npm/v/@cdzzy%2Ftraceshield?color=red)](https://www.npmjs.com/package/@cdzzy/traceshield)
 
+[![npm](https://img.shields.io/npm/v/@cdzzy%2Ftraceshield?color=red)](https://www.npmjs.com/package/@cdzzy/traceshield)
+[![CI](https://github.com/cdzzy/traceshield/actions/workflows/ci.yml/badge.svg)](https://github.com/cdzzy/traceshield/actions/workflows/ci.yml)
+[![TypeScript](https://img.shields.io/badge/TypeScript-5.0+-blue)](tsconfig.json)
+[![License: Apache-2.0](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
+[![Tests](https://img.shields.io/badge/tests-passing-brightgreen)](tests/)
 
 **Audit trail and policy enforcement for AI agent actions.**
 
 Every action an AI agent takes — tool call, API request, file write, decision — is recorded, attributed, and policy-checked in real time. Like an immutable audit log for your agent fleet.
 
-[![TypeScript](https://img.shields.io/badge/TypeScript-5.0+-blue)](tsconfig.json)
-[![License: Apache-2.0](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
-[![Tests](https://img.shields.io/badge/tests-passing-brightgreen)](tests/)
+## OWASP Agentic AI Top 10 Coverage
+
+traceshield's detection, blocking, and audit capabilities mapped to the [OWASP Top 10 for Agentic Applications (ASI01–ASI10:2026)](docs/owasp-asi-mapping.md):
+
+| Risk | Threat | traceshield capability |
+|------|--------|------------------------|
+| ASI01 | Agent Goal Hijack | Injection detection + runtime guard blocking |
+| ASI02 | Tool Misuse & Exploitation | Policy engine rules, rate limits, tool allowlists |
+| ASI03 | Agent Identity & Privilege Abuse | Attribution chains + human approval gates |
+| ASI04 | Agentic Supply Chain Compromise | `traceshield scan` MCP config auditing |
+| ASI05 | Unexpected Code Execution | Pre-execution interception, shell-flag scanning |
+| ASI06 | Memory & Context Poisoning | Injection detector on memory writes |
+| ASI07 | Insecure Inter-Agent Communication | SHA-256 hash chain, tamper detection |
+| ASI08 | Cascading Agent Failures | Behavior baselines + attribution graphs |
+| ASI09 | Human-Agent Trust Exploitation | Forced approval gates + red team toolkit |
+| ASI10 | Rogue Agents | Per-agent anomaly detection + quarantine alerts |
+
+→ Full matrix (shipped / partial / planned, per module): **[docs/owasp-asi-mapping.md](docs/owasp-asi-mapping.md)**
 
 ---
 
@@ -43,6 +62,7 @@ Without traceshield, answering these questions means sifting through unstructure
 - 🧠 **Threat intel feed** — dynamic policy updates from MISP/OpenCTI (v0.2.0)
 - 📦 **Compliance export** — JSON-LD / CEF / JSON with integrity proof (v0.2.0)
 - 🔐 **ZK compliance proofs** — privacy-preserving audits (v0.2.0)
+- 🔎 **MCP config scanner** — `traceshield scan` audits MCP client configs (Claude Desktop, VS Code, Cursor) for tool-description poisoning, hidden Unicode smuggling, and dangerous permission combos (v0.5.0)
 
 ---
 
@@ -213,6 +233,25 @@ const report = await recorder.auditReport({
 
 ---
 
+## CLI
+
+`traceshield` ships an audit CLI (`status` / `traces` / `violations` / `verify` — see `traceshield help`) plus a supply-chain scanner:
+
+```bash
+# Scan well-known MCP config locations for the current user
+npx @cdzzy/traceshield scan
+
+# Scan specific files or directories (directories are searched for known config names)
+npx @cdzzy/traceshield scan ~/.claude/claude_desktop_config.json ./project
+
+# Machine-readable output for CI
+npx @cdzzy/traceshield scan --json
+```
+
+The scanner detects tool-description poisoning (instruction-override phrases), hidden Unicode smuggling (zero-width / bidi characters), and dangerous permission combos (permissive execution flags, shell wrappers with secrets, wildcard tool allowlists, root filesystem mounts). Exit code is `1` when high/critical findings are present, so it can gate CI directly.
+
+---
+
 ## Comparison
 
 | Feature | traceshield | LangSmith | Helicone | Custom Logging |
@@ -239,6 +278,7 @@ const report = await recorder.auditReport({
 - [ ] Differential privacy for sensitive trace data
 - [x] **`traceshield` CLI for audit investigation** (`status` / `traces` / `violations` / `verify`, with lossless `full` export) ✅ (v0.3.0)
 - [x] **Multi-agent attribution graph visualization** (agent→action→policy Mermaid/DOT rendering) ✅ (v0.4.0)
+- [x] **MCP configuration scanner** (`scan` CLI: poisoning phrases, hidden Unicode, dangerous permission combos; `--json` output) ✅ (v0.5.0)
 
 ---
 

@@ -10,9 +10,12 @@
  *   traceshield traces <export.json> [--agent A] [--status S] [--limit N]
  *   traceshield violations <export.json> [--agent A] [--limit N]
  *   traceshield verify <export.json>
+ *   traceshield scan [paths...] [--json]
  *
  * The export file is the JSON produced by `TraceShieldExporter` (a bundle with
  * a `traces` array). If omitted or "-", an empty in-memory store is used.
+ * `scan` reads MCP client config files instead and reports tool-description
+ * poisoning / dangerous permission findings (exit 1 on high/critical).
  */
 
 import * as fs from 'node:fs';
@@ -220,14 +223,57 @@ Usage:
   traceshield traces     <export.json> [--agent A] [--status S] [--limit N]
   traceshield violations <export.json> [--agent A] [--limit N]
   traceshield verify     <export.json>
+  traceshield scan       [paths...] [--json]
 
 The export file is JSON from TraceShieldExporter (a bundle with a "traces"
 array). Use "-" or omit it to inspect an empty in-memory store.
+
+scan inspects MCP client config files (claude_desktop_config.json, .mcp.json,
+.cursor/mcp.json, .vscode/mcp.json) for tool-description poisoning (instruction
+override phrases, hidden Unicode) and dangerous permission combos. With no
+paths, well-known per-platform config locations are scanned. --json prints a
+machine-readable report; the exit code is 1 when any high/critical finding is
+present.
 `);
   return 0;
 }
 
+// ── scan command ─────────────────────────────────────────────────────────
+
+/**
+ * Parse scan-specific argv (everything after the program and command name).
+ * Kept separate from parseArgs so scan's own flags do not leak into the
+ * audit commands.
+ */
+function parseScanArgs(argv: string[]): { paths: string[]; json: boolean } {
+  const paths: string[] = [];
+  let json = false;
+  for (let i = 3; i < argv.length; i++) {
+    const a = argv[i]!;
+    if (a === '--json') {
+      json = true;
+    } else if (a.startsWith('-') && a !== '-') {
+      throw new CliError(`unknown scan option: ${a} (scan supports --json)`);
+    } else {
+      paths.push(a);
+    }
+  }
+  return { paths, json };
+}
+
+async function cmdScan(argv: string[]): Promise<number> {
+  const { paths, json } = parseScanArgs(argv);
+  const { scanPaths, renderReport } = await import('./mcp-scanner.js');
+  const report = await scanPaths(paths);
+  process.stdout.write(renderReport(report, { json }));
+  const blocking = report.findings.some((f) => f.severity === 'high' || f.severity === 'critical');
+  return blocking ? 1 : 0;
+}
+
 export async function main(argv: string[] = process.argv): Promise<number> {
+  // scan parses its own flags, so route it before the shared parseArgs.
+  if ((argv[2] ?? 'help') === 'scan') return cmdScan(argv);
+
   const args = parseArgs(argv);
   switch (args.command) {
     case 'status': return cmdStatus(args);
