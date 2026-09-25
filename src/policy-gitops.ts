@@ -19,7 +19,7 @@
  *   console.log(renderDiffMarkdown(diffPolicySets(before, candidate)));
  */
 
-import type { Policy, PolicyRule, PolicySet } from './types.js';
+import type { PolicyRule, PolicySet } from './types.js';
 
 const KNOWN_ACTION_TYPES = new Set([
   'tool_call', 'llm_call', 'decision', 'message', 'resource', 'retrieval', 'output', '*',

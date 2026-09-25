@@ -2,6 +2,18 @@
 
 All notable changes to TraceShield are documented in this file.
 
+## [0.6.1] - 2026-09-25
+
+### Changed
+
+- `yaml` bumped to 2.9.x — 2.8.2 carried a Stack Overflow advisory (GHSA-48c2-rrv3-qjmp) triggered by deeply nested YAML; the CLI scanner and policy loader now run on a patched parser.
+- Dev toolchain: vitest 3.2.7, tsx 4.23.15 (previous pin pulled a vulnerable esbuild, GHSA-g7r4-m6w7-qqqr), and `@vitest/coverage-v8` added so the CI coverage artifact reflects real numbers.
+- Remaining `npm audit` findings are dev-only (vitest mock helper, moderate) with no non-breaking fix — vitest 5 would drop Node 18/20 support in CI — so they are accepted and documented here.
+
+### Fixed
+
+- Removed unused `StoredViolation` / `Policy` type imports flagged by ESLint.
+
 ## [0.6.0] - 2026-09-20
 
 ### Added

@@ -20,7 +20,7 @@
 
 import * as fs from 'node:fs';
 import { MemoryStorage } from './storage/memory.js';
-import type { Trace, StoredViolation } from './types.js';
+import type { Trace } from './types.js';
 
 export class CliError extends Error {
   constructor(
