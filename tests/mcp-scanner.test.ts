@@ -429,6 +429,40 @@ describe('scanPaths and reports', () => {
     }
   });
 
+  it('buildReport attaches an AIVSS score to every finding', async () => {
+    setup();
+    try {
+      const report = await scanPaths([poisonedFile]);
+      expect(report.findings.length).toBeGreaterThan(0);
+      for (const f of report.findings) {
+        expect(f.aivss).toBeDefined();
+        expect(f.aivss!.baseScore).toBeGreaterThanOrEqual(0);
+        expect(f.aivss!.baseScore).toBeLessThanOrEqual(10);
+        // Calibration contract: the numeric band never contradicts the ordinal severity.
+        expect(f.aivss!.severity).toBe(f.severity);
+        expect(f.aivss!.vector).toMatch(/^AIVSS:1\.0\//);
+      }
+      const override = report.findings.find((f) => f.ruleId === 'MCP001');
+      expect(override?.aivss?.baseScore).toBe(8.7);
+    } finally {
+      teardown();
+    }
+  });
+
+  it('renderReport shows the AIVSS score in both output modes', async () => {
+    setup();
+    try {
+      const report = await scanPaths([poisonedFile]);
+      const text = renderReport(report);
+      expect(text).toMatch(/\(AIVSS \d+\.\d\)/);
+      const json = JSON.parse(renderReport(report, { json: true }));
+      expect(json.findings[0].aivss.baseScore).toBeGreaterThanOrEqual(0);
+      expect(json.findings[0].aivss.vector).toMatch(/^AIVSS:1\.0\//);
+    } finally {
+      teardown();
+    }
+  });
+
   it('renderReport clean scan shows no findings', () => {
     const text = renderReport(buildReport([{ file: 'clean.json', format: 'generic-mcp', servers: 1, findings: [] }]));
     expect(text).toContain('No poisoning patterns');

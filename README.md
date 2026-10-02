@@ -63,6 +63,7 @@ Without traceshield, answering these questions means sifting through unstructure
 - 📦 **Compliance export** — JSON-LD / CEF / JSON with integrity proof (v0.2.0)
 - 🔐 **ZK compliance proofs** — privacy-preserving audits (v0.2.0)
 - 🔎 **MCP config scanner** — `traceshield scan` audits MCP client configs (Claude Desktop, VS Code, Cursor) for tool-description poisoning, hidden Unicode smuggling, and dangerous permission combos (v0.5.0)
+- 🎯 **AIVSS severity scoring** — every finding gets a CVSS-style 0–10 base score with a reproducible `AIVSS:1.0/…` vector, calibrated to the agent attack surface (v0.7.0)
 
 ---
 
@@ -248,7 +249,7 @@ npx @cdzzy/traceshield scan ~/.claude/claude_desktop_config.json ./project
 npx @cdzzy/traceshield scan --json
 ```
 
-The scanner detects tool-description poisoning (instruction-override phrases), hidden Unicode smuggling (zero-width / bidi characters), and dangerous permission combos (permissive execution flags, shell wrappers with secrets, wildcard tool allowlists, root filesystem mounts). Exit code is `1` when high/critical findings are present, so it can gate CI directly.
+The scanner detects tool-description poisoning (instruction-override phrases), hidden Unicode smuggling (zero-width / bidi characters), and dangerous permission combos (permissive execution flags, shell wrappers with secrets, wildcard tool allowlists, root filesystem mounts). Every finding carries an **AIVSS** score — a CVSS v3.1-style 0–10 base rating computed from agent-adapted metrics (attack vector, privileges, scope of sandbox escape, confidentiality/integrity/availability impact), with a reproducible `AIVSS:1.0/AV:…/…` vector string in `--json` output for trend tracking and triage ranking. Exit code is `1` when high/critical findings are present, so it can gate CI directly.
 
 ---
 

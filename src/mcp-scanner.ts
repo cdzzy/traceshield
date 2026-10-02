@@ -18,6 +18,8 @@
 
 import * as fs from 'node:fs';
 
+import { scoreFinding, type AivssScore } from './aivss.js';
+
 export type ScanSeverity = 'info' | 'low' | 'medium' | 'high' | 'critical';
 
 export interface ScanFinding {
@@ -32,6 +34,8 @@ export interface ScanFinding {
   field?: string;
   /** Matched text, with control characters escaped so hidden chars are visible. */
   evidence?: string;
+  /** AIVSS numeric score (0–10), attached by `buildReport` from the rule's canned profile. */
+  aivss?: AivssScore;
 }
 
 export interface ScanResult {
@@ -460,7 +464,8 @@ export function buildReport(results: ScanResult[], scannedAt = new Date().toISOS
     .sort((a, b) =>
       severityRank[b.severity] - severityRank[a.severity]
       || a.file.localeCompare(b.file)
-      || a.ruleId.localeCompare(b.ruleId));
+      || a.ruleId.localeCompare(b.ruleId))
+    .map((f) => ({ ...f, aivss: scoreFinding(f) }));
   return {
     scannedAt,
     files: results.length,
@@ -523,7 +528,7 @@ export function renderReport(report: ScanReport, opts: { json?: boolean } = {}):
   }
   for (const f of report.findings) {
     lines.push('');
-    lines.push(`  [${f.severity.toUpperCase()}] ${f.ruleId} ${f.title}`);
+    lines.push(`  [${f.severity.toUpperCase()}] ${f.ruleId}${f.aivss ? ` (AIVSS ${f.aivss.baseScore.toFixed(1)})` : ''} ${f.title}`);
     lines.push(`    file: ${f.file}${f.server ? ` · server: ${f.server}` : ''}${f.field ? ` · field: ${f.field}` : ''}`);
     lines.push(`    ${f.detail}`);
     if (f.evidence) lines.push(`    evidence: "${f.evidence}"`);

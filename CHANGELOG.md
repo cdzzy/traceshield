@@ -2,6 +2,14 @@
 
 All notable changes to TraceShield are documented in this file.
 
+## [0.7.0] - 2026-10-02
+
+### Added
+
+- **AIVSS severity scoring** (`src/aivss.ts`): a CVSS v3.1-style 0–10 base score for every scanner finding, adapted to agentic attack surface (tool descriptions, config files, marketplace entries as the reachable surface; scope change = impact escaping the agent sandbox). Canned metric vectors per rule MCP000–MCP007 keep the numeric band consistent with each rule's built-in severity; MCP002's per-Unicode-range severities resolve through `rule@severity` dynamic profiles, and unknown rules fall back to severity-matched vectors so a score never contradicts the ordinal rating.
+- **Report integration**: `buildReport` attaches an `aivss` score (base score, band, impact/exploitability sub-scores, vector string) to every finding; `renderReport` prints it as `(AIVSS 8.7)` next to each rule id in terminal mode and it flows through `--json` output for tooling.
+- **Vector API**: `toVectorString`/`parseVectorString` round-trip canonical `AIVSS:1.0/AV:…/AC:…/PR:…/UI:…/S:…/C:…/I:…/A:…` strings (case-insensitive, rejects unknown/missing/duplicate metrics) so scores are reproducible and auditable; each canned profile ships a rationale documenting its metric choices.
+
 ## [0.6.1] - 2026-09-25
 
 ### Changed
