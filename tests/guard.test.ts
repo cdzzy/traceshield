@@ -178,6 +178,80 @@ describe('RuntimeGuard', () => {
     expect(trace!.integrity_hash.length).toBe(64);
   });
 
+  it('should record pre-check warnings with pre-execution context', async () => {
+    const violations: Array<{ context: Record<string, unknown> }> = [];
+
+    const hookedShield = new TraceShield({
+      policies: testPolicies,
+      storage: { type: 'memory' },
+      hooks: {
+        onViolation: (v) => {
+          violations.push(v as { context: Record<string, unknown> });
+        },
+      },
+    });
+
+    const guard = hookedShield.createGuard({ agentId: 'test-agent' });
+
+    await guard.execute(
+      'tool_call',
+      { name: 'http_get', input: { url: 'https://api.example.com' } },
+      async () => ({ status: 200 }),
+    );
+
+    // The warn rule triggers on the tool name (pre-phase), so its recorded
+    // context must reflect the pre-execution state: no output yet.
+    const warn = violations.find((v) => (v.context.action_name as string) === 'http_get');
+    expect(warn).toBeDefined();
+    expect(warn!.context.output).toBeUndefined();
+
+    await guard.complete();
+  });
+
+  it('should record post-check warnings with output context', async () => {
+    const violations: Array<{ rule_id?: string; context: Record<string, unknown> }> = [];
+
+    const hookedShield = new TraceShield({
+      policies: {
+        version: '1.0',
+        policies: [
+          {
+            name: 'output-warning',
+            rules: [
+              {
+                id: 'warn-sensitive',
+                action: 'tool_call',
+                condition: { output_contains: ['secret'] },
+                effect: 'warn',
+                message: 'Output contains sensitive term',
+              },
+            ],
+          },
+        ],
+      },
+      storage: { type: 'memory' },
+      hooks: {
+        onViolation: (v) => {
+          violations.push(v as { rule_id?: string; context: Record<string, unknown> });
+        },
+      },
+    });
+
+    const guard = hookedShield.createGuard({ agentId: 'test-agent' });
+
+    await guard.execute(
+      'tool_call',
+      { name: 'read_file', input: {} },
+      async () => 'the secret is here',
+    );
+
+    const warn = violations.find((v) => v.rule_id === 'warn-sensitive');
+    expect(warn).toBeDefined();
+    expect(warn!.context.output).toBe('the secret is here');
+
+    await guard.complete();
+  });
+
   it('should support hooks', async () => {
     const violations: unknown[] = [];
     const spanStarts: unknown[] = [];

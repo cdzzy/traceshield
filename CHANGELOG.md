@@ -2,6 +2,22 @@
 
 All notable changes to TraceShield are documented in this file.
 
+## [Unreleased]
+
+### Fixed
+
+- **Phase-accurate warning contexts** (`runtime-guard.ts`): warn-rule violations
+  are now recorded with the context of the evaluation phase that produced them —
+  pre-check warnings carry the pre-execution context (no `output`), post-check
+  warnings carry the post-execution context. Previously every warn violation was
+  recorded with the post context, mislabeling input-side warnings as if they had
+  observed the tool's output.
+- **Dependency security**: transitive `brace-expansion` (inside the ESLint
+  dev-dependency tree) bumped past 1.1.20, clearing the high-severity
+  GHSA-q2hr-2g5m-vwhr / GHSA-qhr7-859c-m2p7 / GHSA-6j4f-fj2g-mc7p CPU/stack
+  exhaustion advisories. Remaining audit findings are the known dev-only vitest
+  mock helper (moderate, no non-breaking fix).
+
 ## [0.7.0] - 2026-10-02
 
 ### Added

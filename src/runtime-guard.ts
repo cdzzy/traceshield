@@ -99,6 +99,14 @@ export class RuntimeGuard {
       throw new PolicyViolationError(violation, preContext);
     }
 
+    // Record pre-check warnings with the pre-execution context (no output yet),
+    // so the violation accurately reflects the evaluation stage.
+    for (const evaluation of preDecision.evaluations) {
+      if (evaluation.result === 'warn') {
+        await this.recordViolation(span, evaluation, preContext);
+      }
+    }
+
     // Step 3: Execute the action
     let output: T;
     let error: SpanError | undefined;
@@ -147,8 +155,9 @@ export class RuntimeGuard {
       status = 'failed';
     }
 
-    // Record violations for warnings too
-    for (const evaluation of allEvaluations) {
+    // Record violations for warnings too — each with the context of its own
+    // evaluation phase (pre warnings carry no output).
+    for (const evaluation of postDecision.evaluations) {
       if (evaluation.result === 'warn') {
         await this.recordViolation(span, evaluation, postContext);
       }
