@@ -2,7 +2,25 @@
 
 All notable changes to TraceShield are documented in this file.
 
-## [Unreleased]
+## [0.8.0] - 2026-10-09
+
+### Changed
+
+- **Node 18 is EOL — minimum supported Node is now 20** (`engines`), matching
+  the CI matrix which now runs on Node 20 / 22 / 24. Node 18 reached
+  end-of-life on 2025-04-30 and the test toolchain (tinypool 2.x) no longer
+  supports it.
+- **Dev toolchain security hardening**: `overrides` force `tinypool@2.1.2`
+  and `source-map-js@1.2.2`, closing the critical tinypool
+  prototype-pollution-to-RCE advisories
+  ([GHSA-5gmw-xhrv-c9v3](https://github.com/advisories/GHSA-5gmw-xhrv-c9v3),
+  [GHSA-85c8-ppgw-ccpr](https://github.com/advisories/GHSA-85c8-ppgw-ccpr))
+  and the high source-map-js event-loop denial of service
+  ([GHSA-68fv-2mgg-jv7q](https://github.com/advisories/GHSA-68fv-2mgg-jv7q))
+  in the vitest dependency chain. All 171 tests pass against tinypool 2.1.2.
+  Remaining audit findings are dev-only and have no non-breaking fix: the
+  vitest mock helper ([GHSA-82fw-gwwq-j7x9](https://github.com/advisories/GHSA-82fw-gwwq-j7x9),
+  moderate) requires the vitest 5.0 breaking upgrade (Node ≥ 22.12).
 
 ### Fixed
 
@@ -15,8 +33,7 @@ All notable changes to TraceShield are documented in this file.
 - **Dependency security**: transitive `brace-expansion` (inside the ESLint
   dev-dependency tree) bumped past 1.1.20, clearing the high-severity
   GHSA-q2hr-2g5m-vwhr / GHSA-qhr7-859c-m2p7 / GHSA-6j4f-fj2g-mc7p CPU/stack
-  exhaustion advisories. Remaining audit findings are the known dev-only vitest
-  mock helper (moderate, no non-breaking fix).
+  exhaustion advisories.
 
 ## [0.7.0] - 2026-10-02
 
