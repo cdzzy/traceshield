@@ -2,6 +2,26 @@
 
 All notable changes to TraceShield are documented in this file.
 
+## [Unreleased]
+
+### Changed
+
+- **Hardened the audit dashboard HTTP layer**: `AuditDashboard` no longer
+  types its Node server / request / response objects as `any` — they now use
+  `http.Server` / `IncomingMessage` / `ServerResponse` (type-only import, so
+  browser bundles are unaffected), and the `start()` / `stop()` lifecycle no
+  longer relies on non-null assertions.
+- **Fixed `port: 0` (ephemeral port) being swallowed to the 8080 default** —
+  the config default now uses nullish coalescing so callers can bind an
+  OS-assigned port.
+- **Escaped user-controlled values in the dashboard HTML** (agent ids,
+  action names, rule ids, outcomes): dashboard data is rendered from agent
+  activity, which is untrusted input, so interpolation is now HTML-escaped to
+  prevent stored-XSS through a malicious agent string.
+- **Added `tests/dashboard.test.ts`** — smoke coverage for `/`, `/dashboard`,
+  `/api/stats`, `/api/traces`, 404 handling, and server shutdown (previously
+  the dashboard module had no tests).
+
 ## [0.9.0] - 2026-10-10
 
 ### Changed

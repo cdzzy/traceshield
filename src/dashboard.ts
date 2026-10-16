@@ -16,6 +16,7 @@
 import { TraceRecorder } from './trace-recorder.js';
 import { PolicyEngine } from './policy-engine.js';
 import type { Trace, StoredViolation } from './types.js';
+import type { Server, IncomingMessage, ServerResponse } from 'node:http';
 
 export interface DashboardConfig {
   port?: number;
@@ -56,7 +57,7 @@ export class AuditDashboard {
   private recorder: TraceRecorder;
   private policyEngine?: PolicyEngine;
   private config: Required<DashboardConfig>;
-  private server?: any;
+  private server?: Server;
   private stats: DashboardStats;
   private updateInterval?: NodeJS.Timeout;
 
@@ -68,7 +69,7 @@ export class AuditDashboard {
     this.recorder = recorder;
     this.policyEngine = policyEngine;
     this.config = {
-      port: config.port || 8080,
+      port: config.port ?? 8080,
       host: config.host || '0.0.0.0',
       refreshInterval: config.refreshInterval || 5000,
       maxTraces: config.maxTraces || 1000,
@@ -107,18 +108,19 @@ export class AuditDashboard {
     // Dynamic import to avoid Node.js-specific code in browser bundles
     const http = await import('http');
 
-    this.server = http.createServer((req: any, res: any) => {
+    const server = http.createServer((req: IncomingMessage, res: ServerResponse) => {
       this.handleRequest(req, res);
     });
+    this.server = server;
 
     return new Promise((resolve, reject) => {
-      this.server!.listen(this.config.port, this.config.host, () => {
+      server.listen(this.config.port, this.config.host, () => {
         console.log(`🔍 TraceShield Dashboard running at http://${this.config.host}:${this.config.port}`);
         this.startStatsUpdate();
         resolve();
       });
 
-      this.server!.on('error', reject);
+      server.on('error', reject);
     });
   }
 
@@ -130,9 +132,11 @@ export class AuditDashboard {
       clearInterval(this.updateInterval);
     }
 
-    if (this.server) {
+    const server = this.server;
+    if (server) {
+      this.server = undefined;
       return new Promise((resolve) => {
-        this.server!.close(() => {
+        server.close(() => {
           console.log('Dashboard server stopped');
           resolve();
         });
@@ -143,8 +147,9 @@ export class AuditDashboard {
   /**
    * Handle HTTP requests
    */
-  private handleRequest(req: any, res: any): void {
-    const parsedUrl = new URL(req.url, `http://${req.headers.host}`);
+  private handleRequest(req: IncomingMessage, res: ServerResponse): void {
+    const host = req.headers.host ?? `${this.config.host}:${this.config.port}`;
+    const parsedUrl = new URL(req.url ?? '/', `http://${host}`);
     const pathname = parsedUrl.pathname;
 
     // CORS headers
@@ -178,7 +183,7 @@ export class AuditDashboard {
   /**
    * Serve the main dashboard HTML
    */
-  private serveDashboard(res: any): void {
+  private serveDashboard(res: ServerResponse): void {
     const html = `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -386,6 +391,14 @@ export class AuditDashboard {
     </div>
 
     <script>
+        // Escape user-controlled values before they reach innerHTML (agent
+        // activity strings are untrusted data — see audit dashboard XSS notes).
+        function esc(value) {
+            return String(value).replace(/[&<>"']/g, (c) => ({
+                '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
+            }[c]));
+        }
+
         async function fetchStats() {
             try {
                 const res = await fetch('/api/stats');
@@ -414,10 +427,10 @@ export class AuditDashboard {
                 tbody.innerHTML = data.slice(0, 10).map(v => \`
                     <tr>
                         <td class="timestamp">\${new Date(v.timestamp).toLocaleTimeString()}</td>
-                        <td>\${v.agentId}</td>
-                        <td>\${v.action}</td>
-                        <td>\${v.rule}</td>
-                        <td><span class="badge badge-\${v.outcome === 'blocked' ? 'error' : 'warning'}">\${v.outcome}</span></td>
+                        <td>\${esc(v.agentId)}</td>
+                        <td>\${esc(v.action)}</td>
+                        <td>\${esc(v.rule)}</td>
+                        <td><span class="badge badge-\${v.outcome === 'blocked' ? 'error' : 'warning'}">\${esc(v.outcome)}</span></td>
                     </tr>
                 \`).join('');
             } catch (e) {
@@ -439,10 +452,10 @@ export class AuditDashboard {
                 tbody.innerHTML = data.map(t => \`
                     <tr>
                         <td class="timestamp">\${new Date(t.timestamp).toLocaleTimeString()}</td>
-                        <td>\${t.agentId}</td>
-                        <td>\${t.action}</td>
-                        <td>\${t.resource || '-'}</td>
-                        <td><span class="badge badge-\${t.policyOutcome === 'allowed' ? 'success' : t.policyOutcome === 'blocked' ? 'error' : 'warning'}">\${t.policyOutcome}</span></td>
+                        <td>\${esc(t.agentId)}</td>
+                        <td>\${esc(t.action)}</td>
+                        <td>\${esc(t.resource || '-')}</td>
+                        <td><span class="badge badge-\${t.policyOutcome === 'allowed' ? 'success' : t.policyOutcome === 'blocked' ? 'error' : 'warning'}">\${esc(t.policyOutcome)}</span></td>
                     </tr>
                 \`).join('');
             } catch (e) {
@@ -463,8 +476,8 @@ export class AuditDashboard {
                 
                 tbody.innerHTML = data.map(a => \`
                     <tr>
-                        <td>\${a.agentId}</td>
-                        <td>\${a.traceCount}</td>
+                        <td>\${esc(a.agentId)}</td>
+                        <td>\${esc(a.traceCount)}</td>
                         <td><span class="badge badge-success">Active</span></td>
                     </tr>
                 \`).join('');
@@ -496,7 +509,7 @@ export class AuditDashboard {
   /**
    * Serve stats API
    */
-  private serveStats(res: any): void {
+  private serveStats(res: ServerResponse): void {
     res.writeHead(200, { 'Content-Type': 'application/json' });
     res.end(JSON.stringify(this.stats));
   }
@@ -504,7 +517,7 @@ export class AuditDashboard {
   /**
    * Serve traces API
    */
-  private serveTraces(res: any, params: URLSearchParams): void {
+  private serveTraces(res: ServerResponse, params: URLSearchParams): void {
     const limit = parseInt(params.get('limit') || '100', 10);
     
     // Get recent traces from storage (simplified)
@@ -517,7 +530,7 @@ export class AuditDashboard {
   /**
    * Serve violations API
    */
-  private serveViolations(res: any): void {
+  private serveViolations(res: ServerResponse): void {
     // This would query the policy engine for violations
     const violations: any[] = [];
     
@@ -528,7 +541,7 @@ export class AuditDashboard {
   /**
    * Serve agents API
    */
-  private serveAgents(res: any): void {
+  private serveAgents(res: ServerResponse): void {
     res.writeHead(200, { 'Content-Type': 'application/json' });
     res.end(JSON.stringify(this.stats.agents.topAgents));
   }
