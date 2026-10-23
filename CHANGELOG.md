@@ -6,6 +6,9 @@ All notable changes to TraceShield are documented in this file.
 
 ### Changed
 
+- **CI concurrency guard & least privilege** (`.github/workflows/ci.yml`):
+  push/PR runs now cancel stale in-progress runs for the same ref and the
+  workflow only requests `contents: read`.
 - **Hardened the audit dashboard HTTP layer**: `AuditDashboard` no longer
   types its Node server / request / response objects as `any` — they now use
   `http.Server` / `IncomingMessage` / `ServerResponse` (type-only import, so
