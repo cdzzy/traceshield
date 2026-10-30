@@ -2,7 +2,7 @@
 
 All notable changes to TraceShield are documented in this file.
 
-## [Unreleased]
+## [0.9.1] - 2026-10-30
 
 ### Changed
 
@@ -24,6 +24,16 @@ All notable changes to TraceShield are documented in this file.
 - **Added `tests/dashboard.test.ts`** — smoke coverage for `/`, `/dashboard`,
   `/api/stats`, `/api/traces`, 404 handling, and server shutdown (previously
   the dashboard module had no tests).
+
+### Fixed
+
+- **Release workflow crashed on the tag-version check**
+  (`.github/workflows/release.yml`): the build job called
+  `node -p "require('./package.json')"`, but the package is ESM (`"type":
+  "module"`) — on Node 20 `require` is not defined, so the release guard
+  always failed. The check now reads the manifest with
+  `import { readFile }` (top-level await), and the workflow runs on Node 22
+  (the `engines` floor) instead of Node 20.
 
 ## [0.9.0] - 2026-10-10
 

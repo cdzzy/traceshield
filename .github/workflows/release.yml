@@ -12,10 +12,10 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Use Node.js 20
+      - name: Use Node.js 22.x
         uses: actions/setup-node@v4
         with:
-          node-version: "20"
+          node-version: "22.x"
           cache: "npm"
 
       - name: Install dependencies
@@ -23,7 +23,7 @@ jobs:
 
       - name: Verify tag matches package.json version
         run: |
-          PKG_VERSION="v$(node -p "require('./package.json').version")"
+          PKG_VERSION="v$(node --input-type=module -e "import { readFile } from 'node:fs/promises'; const p = JSON.parse(await readFile('./package.json', 'utf8')); process.stdout.write(p.version)")"
           TAG_VERSION="${GITHUB_REF_NAME}"
           if [ "$PKG_VERSION" != "$TAG_VERSION" ]; then
             echo "::error::Tag ${TAG_VERSION} does not match package.json version ${PKG_VERSION}."
