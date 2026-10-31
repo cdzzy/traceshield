@@ -204,6 +204,51 @@ const report = await recorder.auditReport({
 
 ---
 
+## 合规报告
+
+把录制的追踪数据直接转成审计可用的报告，覆盖真正决定企业采购的三大框架。
+三者共用同一套聚合逻辑，避免不同标准之间数字口径不一致。
+
+```typescript
+import {
+  generateSOC2Report,
+  generateGDPRReport,
+  generateHIPAAReport,
+  generateComplianceReport,
+  formatReportAsMarkdown,
+} from 'traceshield';
+
+const traces = await recorder.getTraces({ from, to });
+
+// 显式指定框架
+const hipaa = generateHIPAAReport(traces, { coveredEntity: 'Acme Health' });
+
+// 或运行时选择（CLI 参数 / 配置项）
+const report = generateComplianceReport(traces, 'soc2', { orgName: 'Acme' });
+
+console.log(formatReportAsMarkdown(report));
+```
+
+**各报告包含什么**
+
+- **共同部分** —— 摘要（追踪数、违规数、拦截/告警计数、合规率、平均延迟、
+  覆盖智能体数）、按规则聚合的违规明细（含受影响智能体与示例）、按智能体的
+  合规表格，以及框架专属的建议清单。
+- **SOC 2**（`generateSOC2Report`）—— 组织/审计方字段，SOC 2 Type II 口径。
+- **GDPR**（`generateGDPRReport`）—— 数据控制者归属与 DPIA 建议。（此前该
+  报告的 `violations` / `agents` 被硬编码为空数组，现已与 SOC 2 共用聚合。）
+- **HIPAA**（`generateHIPAAReport`）—— PHI 相关能力：
+  - **PHI 访问计量** —— 按 span 名（`patient` / `medical` / `ehr` 等）、
+    `metadata.data_classification` 标记（`phi` / `ephi` / `restricted`）或
+    `metadata.phi: true` 标志识别触及受保护健康信息的动作。
+  - **§164.312 条款映射** —— 报告每项控制对应的条款（访问控制 `(a)(1)`、
+    审计控制 `(b)`、完整性 `(c)(1)`、传输安全 `(e)(1)`）。
+  - **PHI 专属建议** —— PHI 动作违规时给出 CRITICAL 提示、§164.316(b)(2)(i)
+    的 6 年留存要求，以及加密与年度风险评估提醒。
+  - Markdown 渲染器会额外输出**PHI 访问表**，审计方无需翻 JSON。
+
+---
+
 ## 对比同类方案
 
 | 功能 | traceshield | LangSmith | Helicone | 自定义日志 |
@@ -218,7 +263,7 @@ const report = await recorder.auditReport({
 
 ## 路线图
 
-- [ ] 合规报告模板（SOC2、GDPR、HIPAA）
+- [x] **合规报告模板（SOC2、GDPR、HIPAA）**（`generateHIPAAReport` + `generateComplianceReport` 统一分发；HIPAA 含 PHI 访问审计与 §164.312 条款映射）✅ (v0.10.0)
 - [ ] 实时违规 Webhook 通知
 - [ ] 基于 GitOps 的策略即代码集成
 - [ ] 敏感追踪数据的差分隐私保护

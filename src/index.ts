@@ -23,6 +23,8 @@ export type {
 export {
   generateSOC2Report,
   generateGDPRReport,
+  generateHIPAAReport,
+  generateComplianceReport,
   formatReportAsMarkdown,
 } from './compliance-reports.js';
 export type {
@@ -30,6 +32,7 @@ export type {
   ComplianceSummary,
   ViolationSummary,
   AgentSummary,
+  ComplianceStandard,
 } from './compliance-reports.js';
 
 // MCP security listener / proxy (Issue #4)

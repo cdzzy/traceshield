@@ -253,6 +253,58 @@ The scanner detects tool-description poisoning (instruction-override phrases), h
 
 ---
 
+## Compliance Reports
+
+Turn recorded traces into auditor-ready reports for the three frameworks that
+actually gate enterprise adoption. All three share one aggregation layer, so
+the numbers can't drift between standards.
+
+```typescript
+import {
+  generateSOC2Report, // SOC 2
+  generateGDPRReport,
+  generateHIPAAReport,
+  generateComplianceReport,
+  formatReportAsMarkdown,
+} from 'traceshield';
+
+const traces = await recorder.getTraces({ from, to });
+
+// Pick a framework explicitly...
+const hipaa = generateHIPAAReport(traces, { coveredEntity: 'Acme Health' });
+
+// ...or at runtime (CLI flag / config value).
+const report = generateComplianceReport(traces, 'soc2', { orgName: 'Acme' });
+
+console.log(formatReportAsMarkdown(report));
+```
+
+**What each report contains**
+
+- **Shared:** summary (traces, violations, blocked/flagged counts, compliance
+  rate, average latency, agents covered), per-rule violation breakdown with
+  affected agents and examples, per-agent compliance table, and
+  framework-specific recommendations.
+- **SOC 2** (`generateSOC2Report`) — org/auditor fields, SOC 2 Type II framing.
+- **GDPR** (`generateGDPRReport`) — data-controller attribution and DPIA
+  guidance. (Previously this report shipped empty `violations` / `agents`
+  arrays; it now uses the same aggregation as SOC 2.)
+- **HIPAA** (`generateHIPAAReport`) — the part that matters for PHI:
+  - **PHI access accounting** — counts spans that touch protected health
+    information by span name (`patient` / `medical` / `ehr` / …), by
+    `metadata.data_classification` tags (`phi` / `ephi` / `restricted`), or by
+    a `metadata.phi: true` flag.
+  - **§164.312 mapping** — reports which provision each control maps to
+    (access control `(a)(1)`, audit controls `(b)`, integrity `(c)(1)`,
+    transmission security `(e)(1)`).
+  - **PHI-scoped recommendations** — CRITICAL callout when a PHI-touching
+    action violated policy, 6-year retention reminder under §164.316(b)(2)(i),
+    plus encryption and annual risk-assessment reminders.
+  - The Markdown renderer emits a dedicated **PHI Access** table so auditors
+  never have to dig into the JSON payload.
+
+---
+
 ## Comparison
 
 | Feature | traceshield | LangSmith | Helicone | Custom Logging |
@@ -267,7 +319,7 @@ The scanner detects tool-description poisoning (instruction-override phrases), h
 
 ## Roadmap
 
-- [x] Compliance report templates (SOC2, GDPR) ✅ (src/compliance-reports.ts)
+- [x] Compliance report templates (SOC2, GDPR, HIPAA) ✅ (src/compliance-reports.ts, v0.10.0)
 - [x] Real-time violation webhooks ✅ (src/webhook-notifier.ts, v0.2.0)
 - [x] Prompt injection detection ✅ (src/injection-detector.ts, v0.2.0)
 - [x] Behavior baseline learning ✅ (src/behavior-baseline.ts, v0.2.0)

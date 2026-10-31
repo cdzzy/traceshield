@@ -2,6 +2,57 @@
 
 All notable changes to TraceShield are documented in this file.
 
+## [0.10.0] - 2026-11-01
+
+### Added
+
+- **HIPAA compliance report** (`generateHIPAAReport`): completes the
+  SOC 2 / GDPR / HIPAA trio. HIPAA is the framework that gates healthcare
+  adoption, and it needs PHI accounting that neither of the existing reports
+  provided.
+  - **PHI access accounting** — counts spans touching protected health
+    information via three independent signals: span name keywords
+    (`patient` / `medical` / `health` / `ehr` / `phi`), a
+    `metadata.data_classification` style tag (`phi` / `ephi` / `restricted`),
+    or a boolean `metadata.phi: true` flag.
+  - **§164.312 provision mapping** — access control `(a)(1)`, audit controls
+    `(b)`, integrity `(c)(1)`, transmission security `(e)(1)`.
+  - **PHI-scoped recommendations** — CRITICAL callout when a PHI-touching
+    action violated policy, a 6-year retention reminder under
+    §164.316(b)(2)(i), plus encryption and annual risk-assessment items.
+  - The Markdown renderer gains a dedicated **PHI Access** table for HIPAA
+    reports (event count, violation count, agents, covered entity,
+    standard), and stays unchanged for other standards.
+- **`generateComplianceReport(traces, standard, options)`** — runtime
+  dispatcher over the `ComplianceStandard` union (`'soc2' | 'gdpr' | 'hipaa'`),
+  for callers that pick the framework from a CLI flag or config value. The
+  switch is exhaustiveness-checked so a new standard cannot be added without
+  handling it.
+
+### Changed
+
+- **Shared aggregation layer** (`aggregate()`): the per-rule violation
+  breakdown and per-agent compliance table used to be inlined in
+  `generateSOC2Report` only. They now live in one function used by all three
+  standards, so the arithmetic cannot drift between reports.
+
+### Fixed
+
+- **GDPR report shipped empty `violations` and `agents`** — it reported a
+  `totalViolations` count but hardcoded `violations: []` and `agents: []`,
+  leaving an auditor with a number and no breakdown. It also hardcoded
+  `averageLatencyMs: 0`. Both now come from the shared aggregation and
+  reflect real data.
+
+### Testing
+
+- 22 new tests (`tests/compliance-reports.test.ts`): SOC 2 and GDPR
+  aggregation (including the regression for the empty GDPR arrays), HIPAA PHI
+  detection through all three signals, provision mapping, PHI-scoped
+  recommendations, the runtime dispatcher, and Markdown rendering for both
+  HIPAA and non-HIPAA reports.
+- Full suite: **198 passed**; `tsc --noEmit` and `eslint src` clean.
+
 ## [0.9.1] - 2026-10-30
 
 ### Changed
