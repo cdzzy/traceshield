@@ -71,4 +71,17 @@ export type { AttributionGraph, GraphNode, GraphEdge, GraphNodeKind } from './at
 export { validatePolicySet, diffPolicySets, renderDiffMarkdown } from './policy-gitops.js';
 export type { PolicyIssue, PolicyValidationReport, PolicyDiff } from './policy-gitops.js';
 
+// Agent alignment checks (reasoning-trace audit)
+export { AgentAlignmentChecker, extractReasoningSteps } from './alignment-check.js';
+export type {
+  AlignmentCategory,
+  AlignmentSignal,
+  AlignmentCheckInput,
+  AlignmentCheckTraceOptions,
+  AlignmentCheckResult,
+  AlignmentCheckerOptions,
+  AlignmentVerdict,
+  ReasoningStep,
+} from './alignment-check.js';
+
 export * from './types.js';

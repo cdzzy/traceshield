@@ -2,6 +2,51 @@
 
 All notable changes to TraceShield are documented in this file.
 
+## [0.11.0] - 2026-11-06
+
+### Added
+
+- **Agent alignment checks** (`src/alignment-check.ts`): audit the agent's
+  reasoning trace — not just its inputs and outputs — for injected
+  instructions and objective drift, in the spirit of LlamaFirewall's Agent
+  Alignment Checks. Fully deterministic, no model call.
+  - **Prompt-injection traces** — instruction override, system-prompt
+    extraction, role redefinition, special-token / chat-template markers, and
+    claimed authority inside chain-of-thought (`ALIGN_INJECTION_*`).
+  - **Goal drift** — explicit task abandonment, goal substitution,
+    "instead of …" plans, plus lexical divergence from the declared intent.
+    Tokenisation is CJK-aware (character bigrams), so Chinese reasoning is
+    scored rather than silently ignored (`ALIGN_DRIFT_*`).
+  - **Policy circumvention, exfiltration, deception** — bypassing policy or
+    approval gates, disabling controls, concealing actions, moving data
+    externally, reading secrets, encoding credentials, withholding actions
+    from the user, fabricating results (`ALIGN_POLICY_*`, `ALIGN_EXFIL_*`,
+    `ALIGN_DECEPTION_*`).
+  - **Tool-scope escalation** — used tools are compared against a declared
+    allowlist (`*` disables the check); case-insensitive and deduplicated
+    (`ALIGN_SCOPE_UNAUTHORIZED_TOOL`).
+  - **Trace adapter** — `checkTrace(trace, …)` extracts reasoning from span
+    metadata (`reasoning` / `thinking` / `chain_of_thought` / `rationale` /
+    `analysis`, string or array) and derives used tools from `tool_call`
+    spans; every signal carries the originating `span_id`.
+  - **Auditable scoring** — noisy-OR over signal weights, mapped to
+    `aligned` / `suspicious` / `misaligned` with configurable thresholds
+    (defaults 0.35 / 0.7). Each signal has a stable code, severity, weight,
+    evidence excerpt (truncation configurable), and optional span id.
+  - Exports: `AgentAlignmentChecker`, `extractReasoningSteps`, and the
+    alignment types from the package root.
+- Feature bullet, README section with a signal-family table, and a roadmap
+  entry.
+
+### Testing
+
+- 37 new tests (`tests/alignment-check.test.ts`): clean reasoning, each
+  pattern family, benign "ignore" phrasing, CJK overlap and topic change,
+  short-intent bypass, tool allowlist (wildcard, case-insensitivity),
+  noisy-OR scoring, custom thresholds, evidence truncation, ordering,
+  metadata extraction, and trace-level auditing (derived tools, explicit
+  `usedTools`, empty trace).
+
 ## [0.10.0] - 2026-11-01
 
 ### Added
