@@ -2,6 +2,18 @@
 
 All notable changes to TraceShield are documented in this file.
 
+## [0.11.1] - 2026-11-06
+
+### Security
+
+- **Dependency hardening**: pin `minimatch` to `^11.0.5` via npm
+  `overrides` (GHSA-g3hv-75wg-m249 — potential DoS via globparts
+  amplification; the affected 10.x line is what `@typescript-eslint`
+  resolves to). Also bump `rimraf` to 6.1.4 and `glob` to 14.0.4 to clear
+  GHSA-3g3m-2fjr-6pw4 (AbortSignal cancellation bypass). `npm audit` is now
+  clean (0 vulnerabilities).
+- Bump `typescript-eslint` to 8.72.1 and refresh the lockfile.
+
 ## [0.11.0] - 2026-11-06
 
 ### Added
