@@ -532,7 +532,7 @@ export class AuditDashboard {
    */
   private serveViolations(res: ServerResponse): void {
     // This would query the policy engine for violations
-    const violations: any[] = [];
+    const violations: unknown[] = [];
     
     res.writeHead(200, { 'Content-Type': 'application/json' });
     res.end(JSON.stringify(violations));

@@ -2,6 +2,25 @@
 
 All notable changes to TraceShield are documented in this file.
 
+## [Unreleased]
+
+### Docs
+
+- **zh-CN sync with v0.11.1**: rewrite `README_zh.md` to cover the full
+  OWASP ASI01–10 mapping, all 17 feature areas (webhooks, injection
+  detection, behavior baselines, red-teaming, threat intel, compliance
+  export, ZK, MCP scanner, AIVSS, alignment checks, …), a new「智能体对齐
+  检查」section with API examples and the six signal families, a CLI
+  section, and an updated roadmap with completed items checked and versioned.
+- Extend the ASI01 row and detection-module list in
+  `docs/owasp-asi-mapping.md` with `alignment-check.ts` (deterministic
+  reasoning-trace audit).
+
+### Changed
+
+- Narrow the audit-dashboard overlay type from `any[]` to `unknown[]` under
+  strict TypeScript. No behavior change.
+
 ## [0.11.1] - 2026-11-06
 
 ### Security

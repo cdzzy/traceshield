@@ -14,7 +14,7 @@ Status legend for the matrix:
 
 | Risk | Description | Detection | Blocking | Audit | Planning |
 |------|-------------|-----------|----------|-------|----------|
-| ASI01 | Agent Goal Hijack | ✅ `injection-detector.ts` — pattern + heuristic layers on every input | ✅ `runtime-guard.ts` — inject before execution, `block` on detection | ✅ `trace-recorder.ts` — input, spans, and policy outcomes hash-chained | 📋 Provenance tags separating trusted system/goal content from untrusted tool output |
+| ASI01 | Agent Goal Hijack | ✅ `injection-detector.ts` — pattern + heuristic layers on every input; `alignment-check.ts` — deterministic reasoning-trace audit for injected instructions and goal drift | ✅ `runtime-guard.ts` — inject before execution, `block` on detection | ✅ `trace-recorder.ts` — input, spans, and policy outcomes hash-chained; `AgentAlignmentChecker` verdicts can be stored beside the trace | 📋 Provenance tags separating trusted system/goal content from untrusted tool output |
 | ASI02 | Tool Misuse & Exploitation | ✅ `policy-engine.ts` — match rules on action type, resource, tags | ✅ `runtime-guard.ts` + YAML `on_violation: block` / `throttle` / rate limits | ✅ `trace-recorder.ts` — per-span `policy_evaluations` with rule IDs | 📋 Schema-level argument validation against per-tool allowlists |
 | ASI03 | Agent Identity & Privilege Abuse | ✅ `attribution-analyzer.ts` / `attribution-graph.ts` — who/what triggered each action | ✅ Policy rules with `require: { approval: true }` human gates | ✅ Full attribution chain per trace (`causalChain`, user, session) | 📋 Per-agent short-lived task-scoped credentials |
 | ASI04 | Agentic Supply Chain Compromise | ✅ `traceshield scan` CLI — poisoned tool descriptions, hidden Unicode, dangerous permission combos in MCP configs | ✅ `policy-gitops.ts` — `validatePolicySet` CI gate for policy changes | ✅ Config scan reports are JSON-exportable for review trails | 📋 Hash-pinning and provenance verification for MCP servers and skills before load |
@@ -32,6 +32,11 @@ Status legend for the matrix:
 - **`src/injection-detector.ts`** — multi-layer prompt-injection detection
   (instruction override, role redefinition, system-prompt extraction, special-token
   injection) applied to inputs and reusable for memory writes (ASI01, ASI06, ASI09).
+- **`src/alignment-check.ts`** — deterministic, model-free audit of an agent's
+  reasoning trace for injected-instruction traces (override, extraction, role
+  redefinition, special tokens, claimed authority), goal drift (task abandonment,
+  intent substitution, CJK-aware lexical divergence), policy circumvention,
+  exfiltration, deception, and unauthorized tool scope (ASI01).
 - **`src/policy-engine.ts`** — declarative rules (YAML or code) that match actions on
   type, resource, tags, and metadata (ASI02, ASI03, ASI05).
 - **`src/behavior-baseline.ts`** — learns per-agent behavior and flags anomalies
